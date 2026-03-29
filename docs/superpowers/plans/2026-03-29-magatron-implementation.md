@@ -588,61 +588,11 @@ git commit -m "feat(simulator): synthetic data generator with progressive result
 ```
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
+pytest==8.2.2
+httpx==0.27.0
 ```
 
-- [ ] **Step 2: Criar simulator/main.py**
-
-```python
-"""
-Simulador local da CDN do TSE.
-Expõe os mesmos endpoints que o TSE real usaria para 2026.
-Ativado apenas em modo dev (docker compose --profile dev).
-"""
-import os
-from fastapi import FastAPI
-from generator import gerar_resultado
-import uvicorn
-
-ELE = os.getenv("ELE_1T", "001")
-
-app = FastAPI(title="Magatron TSE Simulator", version="1.0.0")
-
-
-@app.get("/oficial/ele2026/{ele}/dados-simplificados/{uf}/{filename}")
-async def resultado_variavel(ele: str, uf: str, filename: str):
-    """
-    Imita: GET /oficial/ele2026/{ele}/dados-simplificados/{uf}/{uf}-c{cargo}-e{ele}-r.json
-    Extrai cargo a partir do nome do arquivo: sp-c0003-e000544-r.json → cargo='0003'
-    """
-    # Extrai código do cargo do filename: sp-c0003-e000544-r.json
-    try:
-        cargo_code = filename.split("-c")[1].split("-")[0]
-    except (IndexError, ValueError):
-        cargo_code = "0001"
-    return gerar_resultado(uf=uf, cargo=cargo_code)
-
-
-@app.get("/health")
-async def health():
-    return {"status": "simulating", "mode": "MAGATRON_SIM"}
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8001)
-```
-
-- [ ] **Step 3: Criar simulator/Dockerfile**
-
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-CMD ["python", "main.py"]
-```
-
-- [ ] **Step 4: Escrever testes das rotas do simulador**
+- [ ] **Step 2: Escrever testes das rotas do simulador**
 
 Criar `simulator/tests/test_main.py`:
 
@@ -650,7 +600,6 @@ Criar `simulator/tests/test_main.py`:
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-import pytest
 from fastapi.testclient import TestClient
 from main import app
 
@@ -675,18 +624,66 @@ def test_resultado_variavel_extrai_cargo_do_filename():
     assert resp.json()["cdabr"] == "rj"
 ```
 
-- [ ] **Step 5: Executar testes — deve falhar**
+- [ ] **Step 3: Executar testes — deve falhar**
 
 ```bash
 cd ~/Documents/Projetos/magatron/simulator
+pip install -r requirements.txt -q
 python3 -m pytest tests/test_main.py -v
 ```
 
 Esperado: `ModuleNotFoundError: No module named 'main'`
 
-- [ ] **Step 6: Implementar simulator/main.py** (ver código acima)
+- [ ] **Step 4: Implementar simulator/main.py**
 
-- [ ] **Step 7: Executar testes — deve passar**
+```python
+"""
+Simulador local da CDN do TSE.
+Expõe os mesmos endpoints que o TSE real usaria para 2026.
+Ativado apenas em modo dev (docker compose --profile dev).
+"""
+import os
+from fastapi import FastAPI
+from generator import gerar_resultado
+import uvicorn
+
+app = FastAPI(title="Magatron TSE Simulator", version="1.0.0")
+
+
+@app.get("/oficial/ele2026/{ele}/dados-simplificados/{uf}/{filename}")
+async def resultado_variavel(ele: str, uf: str, filename: str):
+    """
+    Imita: GET /oficial/ele2026/{ele}/dados-simplificados/{uf}/{uf}-c{cargo}-e{ele}-r.json
+    Extrai cargo a partir do nome do arquivo: sp-c0003-e000544-r.json → cargo='0003'
+    """
+    try:
+        cargo_code = filename.split("-c")[1].split("-")[0]
+    except (IndexError, ValueError):
+        cargo_code = "0001"
+    return gerar_resultado(uf=uf, cargo=cargo_code)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "simulating", "mode": "MAGATRON_SIM"}
+
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8001)
+```
+
+- [ ] **Step 5: Criar simulator/Dockerfile**
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["python", "main.py"]
+```
+
+- [ ] **Step 6: Executar todos os testes — deve passar**
 
 ```bash
 python3 -m pytest tests/ -v
@@ -694,7 +691,7 @@ python3 -m pytest tests/ -v
 
 Esperado: 8 testes `PASSED` (5 generator + 3 main).
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 cd ~/Documents/Projetos/magatron
