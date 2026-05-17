@@ -1,7 +1,15 @@
 import { StatusBanner } from "./StatusBanner";
 
 const UFS_OPCOES = ["sp", "rj", "mg", "rs", "ba", "pr", "pe", "ce", "pa", "sc"];
-const CARGOS_OPCOES = ["governador", "presidente", "senador"];
+const CARGOS_OPCOES = ["governador", "presidente", "senador", "dep_federal", "dep_estadual"];
+
+const CARGO_LABELS = {
+  governador:   "Governador",
+  presidente:   "Presidente",
+  senador:      "Senador",
+  dep_federal:  "Deputado Federal",
+  dep_estadual: "Deputado Estadual",
+};
 
 export function Header({ uf, cargo, connected, onUfChange, onCargoChange }) {
   return (
@@ -25,7 +33,7 @@ export function Header({ uf, cargo, connected, onUfChange, onCargoChange }) {
           onChange={(e) => onCargoChange(e.target.value)}
         >
           {CARGOS_OPCOES.map((c) => (
-            <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+            <option key={c} value={c}>{CARGO_LABELS[c] || c}</option>
           ))}
         </select>
         <StatusBanner connected={connected} />

@@ -6,9 +6,11 @@ combinações UF × cargo.
 
 # Mapeamento cargo → código TSE
 CARGO_CODIGOS = {
-    "presidente": "0001",
-    "governador": "0003",
-    "senador":    "0005",
+    "presidente":   "0001",
+    "governador":   "0003",
+    "senador":      "0005",
+    "dep_federal":  "0006",
+    "dep_estadual": "0007",
 }
 
 
