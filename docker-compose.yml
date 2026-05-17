@@ -1,0 +1,75 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    volumes: ["redis_data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports: ["5432:5432"]
+    volumes: ["pg_data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  simulator:
+    build: ./simulator
+    ports: ["8001:8001"]
+    environment:
+      DURACAO_SIMULACAO: ${DURACAO_SIMULACAO:-3600}
+    profiles: ["dev"]
+
+  collector:
+    build: ./collector
+    environment:
+      TSE_BASE_URL: ${TSE_BASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      ELE_1T: ${ELE_1T}
+      UFS: ${UFS:-sp,rj,mg}
+      CARGOS: ${CARGOS:-governador}
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+
+  api:
+    build: ./api
+    ports: ["8000:8000"]
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
+      UFS: ${UFS:-sp,rj,mg}
+      CARGOS: ${CARGOS:-governador}
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports: ["3000:3000"]
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000
+    depends_on:
+      - api
+
+volumes:
+  redis_data:
+  pg_data:
