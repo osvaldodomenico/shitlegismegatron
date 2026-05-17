@@ -1,14 +1,14 @@
-# MAGATRON — Design Spec
+# MEGATRON — Design Spec
 **Data:** 2026-03-29
 **Status:** Aprovado
 **Ciclo eleitoral alvo:** Eleições 2026 (Brasil)
-**Localização do projeto:** `~/Documents/Projetos/magatron`
+**Localização do projeto:** `~/Documents/Projetos/megatron`
 
 ---
 
 ## Objetivo
 
-Construir o **MAGATRON**: sistema de ingestão, processamento e exibição em tempo real de dados de apuração eleitoral. Consome a API pública JSON do TSE, com simulador local para desenvolvimento. Dashboard público com visual noturno de apuração.
+Construir o **MEGATRON**: sistema de ingestão, processamento e exibição em tempo real de dados de apuração eleitoral. Consome a API pública JSON do TSE, com simulador local para desenvolvimento. Dashboard público com visual noturno de apuração.
 
 ---
 
@@ -21,6 +21,7 @@ Construir o **MAGATRON**: sistema de ingestão, processamento e exibição em te
 | Persistência Redis | Consumer da API persiste no Timescale | Elimina serviço processador extra |
 | Modo dev | `--profile dev` no Docker Compose | Isola simulador, 1 único compose file |
 | Parametrização | `TSE_BASE_URL` via `.env` | Troca simulador↔TSE real sem código |
+| Redis consumer | `XREAD` simples (sem consumer group) | Apuração eleitoral é evento único de ~12h; gap de dados no restart da API é aceitável. Se a API reiniciar, o próximo dado do TSE chega em ≤60s. `XGROUP`/`XACK` adicionaria complexidade operacional desnecessária para este caso de uso. |
 
 ---
 
@@ -33,7 +34,7 @@ Construir o **MAGATRON**: sistema de ingestão, processamento e exibição em te
    [Collector]          APScheduler · httpx · diff hash
         │ xadd
         ▼
-     [Redis]            Streams: magatron:{uf}:{cargo}
+     [Redis]            Streams: megatron:{uf}:{cargo}
         │ xread
         ▼
    [API FastAPI]        consumer.py (asyncio task background)
@@ -60,35 +61,82 @@ Construir o **MAGATRON**: sistema de ingestão, processamento e exibição em te
 | `simulator` | python:3.11-slim | 8001 | `dev` |
 | `frontend` | node:20-alpine → nginx | 3000 | sempre |
 
+### Healthchecks e Dependências
+
+```yaml
+# redis: ping a cada 5s
+healthcheck:
+  test: ["CMD", "redis-cli", "ping"]
+  interval: 5s
+  timeout: 3s
+  retries: 5
+
+# timescaledb: pg_isready a cada 10s
+healthcheck:
+  test: ["CMD-SHELL", "pg_isready -U megatron"]
+  interval: 10s
+  timeout: 5s
+  retries: 10
+
+# collector: depends_on redis (condition: service_healthy)
+# api: depends_on redis + timescaledb (condition: service_healthy)
+# frontend: depends_on api (condition: service_started)
+```
+
+Cadeia de inicialização: `redis` e `timescaledb` devem estar healthy antes de `collector` e `api` iniciarem.
+
 ---
 
 ## Módulos
+
+### URL Template do TSE (2026)
+
+O padrão de URL usado pelo collector:
+
+```python
+# Dados variáveis (resultados em tempo real) — principal URL monitorada
+f"{TSE_BASE_URL}/{ELE_1T}/dados-simplificados/{uf}/{uf}-c{cargo}-e{ELE_1T:0>6}-r.json"
+
+# Dados fixos de candidatos (buscar apenas 1x por cargo)
+f"{TSE_BASE_URL}/{ELE_1T}/config/ele-c{cargo}-e{ELE_1T:0>6}-cf.json"
+
+# Exemplo em dev (simulador):
+# TSE_BASE_URL=http://simulator:8001/oficial/ele2026
+# ELE_1T=544 (valor placeholder; atualizar com código real do TSE 2026)
+```
+
+O simulador expõe os mesmos paths para desenvolvimento local.
+
+---
 
 ### `collector/`
 - **Responsabilidade:** Único ponto de fetch de dados externos
 - `APScheduler` dispara `ciclo_coleta()` a cada `POLL_INTERVAL_SECONDS` (padrão: 60s)
 - `fetch_if_changed()` — hash MD5 do payload; só publica se houve mudança
-- Publica em Redis Stream `magatron:{uf}:{cargo}` via `xadd` (maxlen=1000)
+- Publica em Redis Stream `megatron:{uf}:{cargo}` via `xadd` (maxlen=1000)
 - Backoff 1s entre requests; `User-Agent` e `Referer` corretos para evitar rate-limit
-- `TAREFAS` dinâmicas: geradas a partir de `UFS` e `CARGOS` no `.env`
+- `TAREFAS` dinâmicas: geradas a partir de `UFS`, `CARGOS` e `ELE_1T` no `.env`
+- **Backoff no Redis indisponível:** retry exponencial (1s → 2s → 4s → ... → cap 60s). Após 10 tentativas sem sucesso, container encerra com exit code 1 para que Docker reinicie via `restart: unless-stopped`.
 
 ### `simulator/`
 - **Responsabilidade:** Imitar CDN do TSE em modo dev (perfil Docker `dev`)
 - Serve os endpoints com estrutura idêntica ao TSE real
 - Progresso 0%→100% em `DURACAO_SIMULACAO` segundos (default 3600)
 - Fixtures com candidatos fictícios mas estrutura JSON realista
-- `GET /health` retorna `{"mode": "MAGATRON_SIM"}`
+- `GET /health` retorna `{"mode": "MEGATRON_SIM"}`
 
 ### `api/`
 - **Responsabilidade:** Gateway público + persistência
 - `consumer.py`: task asyncio que roda em background via `startup` event
-  - `xread` bloqueante no Redis, avança cursor `$` após cada leitura
+  - `xread` bloqueante no Redis (block=2000ms), avança cursor `$` após cada leitura
   - Broadcast via `ConnectionManager` para todos os WS inscritos na room `{uf}:{cargo}`
-  - INSERT na hypertable Timescale (time=NOW, uf, cargo, pst_pct, payload jsonb)
+  - INSERT na hypertable Timescale: `(time=NOW(), uf, cargo, pst_pct=payload["pst"].rstrip("%"), payload=payload_jsonb)`
+  - **Campo `pst`:** o campo TSE `pst` (ex: `"73.45%"`) é convertido para `NUMERIC` removendo o `%` e parseando como float
 - REST: `GET /resultados/{uf}/{cargo}` — último snapshot do Redis cache em memória
 - REST: `GET /historico/{uf}/{cargo}?ultimas=20` — série temporal do Timescale
 - WebSocket: `/ws/{uf}/{cargo}` — cliente recebe atualizações em tempo real
 - CORS aberto (público)
+- **Rate limiting:** Phase 2. Documentado para não ser esquecido. Implementar via `slowapi` ou nginx `limit_req` antes de exposição nacional.
 
 ### `frontend/`
 - **Responsabilidade:** Dashboard público de apuração (dark, responsivo)
@@ -98,7 +146,7 @@ Construir o **MAGATRON**: sistema de ingestão, processamento e exibição em te
 - Gráfico horizontal de barras (recharts BarChart) por candidato
 - Gráfico de linha temporal (recharts LineChart) — evolução do % apurado via REST `/historico`
 - Status banner: 🟢 Ao Vivo / 🔴 Desconectado / 🟡 Simulando
-- Reconexão automática ao WebSocket após 5s de queda
+- Reconexão WebSocket com backoff exponencial: 2s → 4s → 8s → 16s → cap 30s (evita thundering herd em restart da API)
 
 ### `scripts/`
 - `seed_db.py`: cria extensão TimescaleDB + hypertable + índices na primeira execução
@@ -122,13 +170,15 @@ CREATE TABLE IF NOT EXISTS snapshots (
 );
 
 SELECT create_hypertable('snapshots', 'time', if_not_exists => TRUE);
+-- chunk_time_interval padrão: 7 dias (adequado para evento de ~12h)
+-- Sem política de retenção: dados históricos preservados indefinidamente (volume baixo)
 
 CREATE INDEX ON snapshots (uf, cargo, time DESC);
 ```
 
 ### Redis Streams
 
-**Key:** `magatron:{uf}:{cargo}`
+**Key:** `megatron:{uf}:{cargo}`
 **Fields por mensagem:**
 ```
 timestamp  →  ISO 8601 UTC
@@ -144,7 +194,8 @@ data       →  JSON string do payload TSE
 TSE_BASE_URL=https://resultados.tse.jus.br/oficial/ele2026
 POLL_INTERVAL_SECONDS=60
 
-# Eleição alvo (2026: códigos a definir após publicação TSE)
+# Eleição alvo 2026 — buscar em: https://resultados.tse.jus.br/oficial/ele2026/ele.json
+# após o TSE publicar os códigos (geralmente semanas antes da eleição)
 ELE_1T=TBD
 ELE_2T=TBD
 
@@ -154,7 +205,9 @@ CARGOS=presidente,governador,senador,dep_federal
 
 # Infra
 REDIS_URL=redis://redis:6379
-POSTGRES_URL=postgresql://magatron:magatron123@timescaledb/magatron
+POSTGRES_USER=megatron
+POSTGRES_PASSWORD=change-me-in-production   # TROCAR antes de qualquer deploy não-local
+POSTGRES_DB=megatron
 
 # Simulador (dev)
 DURACAO_SIMULACAO=3600
@@ -190,7 +243,7 @@ DURACAO_SIMULACAO=600 docker compose --profile dev up
 |---|---|
 | Timeout fetch TSE | Log + skip ciclo (retry no próximo intervalo) |
 | TSE retorna mesmos dados | Hash MD5 igual → não publica no Redis |
-| Redis indisponível | Collector tenta reconectar com backoff exponencial |
+| Redis indisponível | Collector: retry exponencial 1s→...→cap 60s; após 10 tentativas, exit code 1 (Docker reinicia via `restart: unless-stopped`) |
 | TimescaleDB indisponível | API loga erro, continua servindo WS sem persistência |
 | WS cliente desconecta | `ConnectionManager.disconnect()` remove da room silenciosamente |
 | Mudança de estrutura JSON | Schema validator no fetcher + log de alerta |
@@ -243,4 +296,4 @@ Fase 3 — Pós-eleição
 
 ---
 
-*Spec gerado em sessão brainstorming · MAGATRON · 2026-03-29*
+*Spec gerado em sessão brainstorming · MEGATRON · 2026-03-29*

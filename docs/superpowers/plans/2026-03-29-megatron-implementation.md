@@ -1,21 +1,21 @@
-# MAGATRON Implementation Plan
+# MEGATRON Implementation Plan
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Construir o sistema MAGATRON — ingestão, processamento e exibição em tempo real de dados de apuração eleitoral brasileira (TSE 2026), com simulador local para desenvolvimento.
+**Goal:** Construir o sistema MEGATRON — ingestão, processamento e exibição em tempo real de dados de apuração eleitoral brasileira (TSE 2026), com simulador local para desenvolvimento.
 
 **Architecture:** Coletor Python/httpx busca endpoints TSE, publica mudanças em Redis Streams via diff-hash. API FastAPI consome o stream, persiste no TimescaleDB e faz broadcast via WebSocket. Frontend Vite/React 18 exibe dashboard público dark-mode com gráficos em tempo real.
 
 **Tech Stack:** Python 3.11, FastAPI, httpx, APScheduler, Redis Streams, TimescaleDB (PostgreSQL 15), Vite, React 18, Tailwind CSS, recharts, Docker Compose, pytest, vitest
 
-**Spec:** `docs/superpowers/specs/2026-03-29-magatron-design.md`
+**Spec:** `docs/superpowers/specs/2026-03-29-megatron-design.md`
 
 ---
 
 ## File Map
 
 ```
-magatron/
+megatron/
 ├── docker-compose.yml
 ├── .env.example
 ├── .env                          # gitignored
@@ -112,7 +112,7 @@ dist/
 *.egg-info/
 ```
 
-Salvar em `magatron/.gitignore`.
+Salvar em `megatron/.gitignore`.
 
 - [ ] **Step 2: Criar .env.example**
 
@@ -134,20 +134,20 @@ CARGOS=presidente,governador
 
 # Infra
 REDIS_URL=redis://redis:6379
-POSTGRES_USER=magatron
+POSTGRES_USER=megatron
 POSTGRES_PASSWORD=change-me-in-production
-POSTGRES_DB=magatron
+POSTGRES_DB=megatron
 
 # Simulador (dev)
 DURACAO_SIMULACAO=3600
 ```
 
-Salvar em `magatron/.env.example`.
+Salvar em `megatron/.env.example`.
 
 - [ ] **Step 3: Copiar .env para dev**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 cp .env.example .env
 # Editar .env: ajustar POSTGRES_PASSWORD e ELE_1T se necessário
 ```
@@ -244,7 +244,7 @@ volumes:
 - [ ] **Step 6: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add .gitignore .env.example docker-compose.yml frontend/postcss.config.js
 git commit -m "chore(infra): scaffold project files, docker-compose, postcss config"
 ```
@@ -293,7 +293,7 @@ def test_seed_chama_create_extension(monkeypatch):
 - [ ] **Step 2: Executar teste — deve falhar**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 pip install psycopg2-binary pytest -q
 python3 -m pytest scripts/tests/test_seed_db.py -v
 ```
@@ -366,10 +366,10 @@ Esperado: 2 testes `PASSED`.
 - [ ] **Step 5: Testar localmente (requer timescaledb rodando)**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 docker compose up -d timescaledb
 docker compose up --wait timescaledb  # bloqueia até healthcheck passar
-POSTGRES_URL="postgresql://magatron:change-me-in-production@localhost:5432/magatron" \
+POSTGRES_URL="postgresql://megatron:change-me-in-production@localhost:5432/megatron" \
   python3 scripts/seed_db.py
 ```
 
@@ -548,7 +548,7 @@ def test_uf_refletida_no_resultado():
 - [ ] **Step 6: Executar testes — deve falhar**
 
 ```bash
-cd ~/Documents/Projetos/magatron/simulator
+cd ~/Documents/Projetos/megatron/simulator
 pip install fastapi uvicorn pytest -q
 python3 -m pytest tests/test_generator.py -v
 ```
@@ -568,7 +568,7 @@ Esperado: 5 testes `PASSED`.
 - [ ] **Step 9: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add simulator/fixtures/ simulator/generator.py simulator/tests/
 git commit -m "feat(simulator): synthetic data generator with progressive results and tests"
 ```
@@ -608,7 +608,7 @@ client = TestClient(app)
 def test_health_retorna_modo_sim():
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert resp.json()["mode"] == "MAGATRON_SIM"
+    assert resp.json()["mode"] == "MEGATRON_SIM"
 
 def test_resultado_variavel_retorna_campos_obrigatorios():
     resp = client.get("/oficial/ele2026/001/dados-simplificados/sp/sp-c0003-e000001-r.json")
@@ -627,7 +627,7 @@ def test_resultado_variavel_extrai_cargo_do_filename():
 - [ ] **Step 3: Executar testes — deve falhar**
 
 ```bash
-cd ~/Documents/Projetos/magatron/simulator
+cd ~/Documents/Projetos/megatron/simulator
 pip install -r requirements.txt -q
 python3 -m pytest tests/test_main.py -v
 ```
@@ -665,7 +665,7 @@ async def resultado_variavel(ele: str, uf: str, filename: str):
 
 @app.get("/health")
 async def health():
-    return {"status": "simulating", "mode": "MAGATRON_SIM"}
+    return {"status": "simulating", "mode": "MEGATRON_SIM"}
 
 
 if __name__ == "__main__":
@@ -694,7 +694,7 @@ Esperado: 8 testes `PASSED` (5 generator + 3 main).
 - [ ] **Step 7: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add simulator/
 git commit -m "feat(simulator): FastAPI server mimicking TSE CDN endpoints, with tests"
 ```
@@ -758,13 +758,13 @@ def test_gerar_tarefas_produto_cartesiano():
 
 def test_gerar_tarefas_campo_stream_key():
     tarefas = gerar_tarefas(ele="544", ufs=["sp"], cargos=["governador"])
-    assert tarefas[0]["stream"] == "magatron:sp:governador"
+    assert tarefas[0]["stream"] == "megatron:sp:governador"
 ```
 
 - [ ] **Step 3: Executar teste — deve falhar**
 
 ```bash
-cd ~/Documents/Projetos/magatron/collector
+cd ~/Documents/Projetos/megatron/collector
 pip install -r requirements.txt -q
 python3 -m pytest tests/test_tse_urls.py -v
 ```
@@ -817,7 +817,7 @@ def gerar_tarefas(ele: str, ufs: list[str], cargos: list[str]) -> list[dict]:
             "uf": uf,
             "cargo": cargo,
             "ele": ele,
-            "stream": f"magatron:{uf}:{cargo}",
+            "stream": f"megatron:{uf}:{cargo}",
         }
         for uf, cargo in product(ufs, cargos)
     ]
@@ -834,7 +834,7 @@ Esperado: 5 testes `PASSED`.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add collector/requirements.txt collector/tse_urls.py collector/tests/test_tse_urls.py
 git commit -m "feat(collector): TSE URL templates and task generator with tests"
 ```
@@ -925,7 +925,7 @@ async def test_fetch_retorna_none_quando_schema_invalido():
 - [ ] **Step 2: Instalar dependências de teste e executar — deve falhar**
 
 ```bash
-cd ~/Documents/Projetos/magatron/collector
+cd ~/Documents/Projetos/megatron/collector
 pip install respx pytest-asyncio -q
 python3 -m pytest tests/test_fetcher.py -v
 ```
@@ -1001,7 +1001,7 @@ Esperado: 4 testes `PASSED`.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add collector/fetcher.py collector/tests/test_fetcher.py
 git commit -m "feat(collector): fetch_if_changed with MD5 diff-hash, tests with respx"
 ```
@@ -1031,17 +1031,17 @@ from publisher import publish
 @pytest.mark.asyncio
 async def test_publish_chama_xadd():
     mock_redis = AsyncMock()
-    await publish(mock_redis, "magatron:sp:governador", {"pst": "50%"})
+    await publish(mock_redis, "megatron:sp:governador", {"pst": "50%"})
     mock_redis.xadd.assert_called_once()
     call_args = mock_redis.xadd.call_args
-    assert call_args[0][0] == "magatron:sp:governador"
+    assert call_args[0][0] == "megatron:sp:governador"
     assert "timestamp" in call_args[0][1]
     assert "data" in call_args[0][1]
 
 @pytest.mark.asyncio
 async def test_publish_usa_maxlen():
     mock_redis = AsyncMock()
-    await publish(mock_redis, "magatron:sp:governador", {"pst": "50%"})
+    await publish(mock_redis, "megatron:sp:governador", {"pst": "50%"})
     call_kwargs = mock_redis.xadd.call_args[1]
     assert call_kwargs.get("maxlen") == 1000
 
@@ -1050,7 +1050,7 @@ async def test_publish_serializa_json():
     import json
     mock_redis = AsyncMock()
     data = {"pst": "73.45%", "hor": "22:05:00"}
-    await publish(mock_redis, "magatron:sp:governador", data)
+    await publish(mock_redis, "megatron:sp:governador", data)
     fields = mock_redis.xadd.call_args[0][1]
     parsed = json.loads(fields["data"])
     assert parsed == data
@@ -1101,7 +1101,7 @@ Esperado: 3 testes `PASSED`.
 
 ```python
 """
-Entry point do coletor MAGATRON.
+Entry point do coletor MEGATRON.
 APScheduler dispara ciclo_coleta() a cada POLL_INTERVAL_SECONDS.
 Em caso de indisponibilidade do Redis, retry exponencial com cap 60s.
 Após 10 tentativas falhas, exit(1) para restart pelo Docker.
@@ -1191,7 +1191,7 @@ CMD ["python", "main.py"]
 - [ ] **Step 7: Build do collector**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 docker compose build collector
 ```
 
@@ -1285,7 +1285,7 @@ async def test_broadcast_ignora_room_vazia():
 - [ ] **Step 3: Executar testes — deve falhar**
 
 ```bash
-cd ~/Documents/Projetos/magatron/api
+cd ~/Documents/Projetos/megatron/api
 pip install -r requirements.txt -q
 python3 -m pytest tests/test_ws_manager.py -v
 ```
@@ -1423,7 +1423,7 @@ def mock_redis():
 - [ ] **Step 8: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add api/
 git commit -m "feat(api): ws_manager with rooms, db.py with asyncpg pool and snapshot persistence"
 ```
@@ -1445,7 +1445,7 @@ git commit -m "feat(api): ws_manager with rooms, db.py with asyncpg pool and sna
 
 ```python
 """
-Consome Redis Stream magatron:{uf}:{cargo} e:
+Consome Redis Stream megatron:{uf}:{cargo} e:
 1. Faz broadcast via WebSocket para clientes inscritos
 2. Persiste snapshot no TimescaleDB
 Roda como asyncio task em background.
@@ -1468,7 +1468,7 @@ UFS    = [u.strip() for u in os.getenv("UFS", "sp").split(",")]
 CARGOS = [c.strip() for c in os.getenv("CARGOS", "governador").split(",")]
 
 STREAMS = {
-    f"magatron:{uf}:{cargo}": "$"
+    f"megatron:{uf}:{cargo}": "$"
     for uf in UFS
     for cargo in CARGOS
 }
@@ -1528,7 +1528,7 @@ router = APIRouter()
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "service": "magatron-api"}
+    return {"status": "ok", "service": "megatron-api"}
 ```
 
 - [ ] **Step 3: Criar api/routes/resultados.py**
@@ -1541,7 +1541,7 @@ router = APIRouter()
 @router.get("/resultados/{uf}/{cargo}")
 async def get_resultado(uf: str, cargo: str):
     from consumer import get_last_snapshot
-    snapshot = get_last_snapshot(f"magatron:{uf}:{cargo}")
+    snapshot = get_last_snapshot(f"megatron:{uf}:{cargo}")
     if snapshot is None:
         raise HTTPException(status_code=404, detail="Sem dados disponíveis ainda")
     return snapshot
@@ -1610,7 +1610,7 @@ def test_resultado_retorna_snapshot():
 
 ```python
 """
-FastAPI application — API pública do MAGATRON.
+FastAPI application — API pública do MEGATRON.
 Expõe REST e WebSocket. Consumer roda como task asyncio em background.
 """
 import asyncio
@@ -1673,7 +1673,7 @@ if __name__ == "__main__":
 - [ ] **Step 7: Executar testes da API**
 
 ```bash
-cd ~/Documents/Projetos/magatron/api
+cd ~/Documents/Projetos/megatron/api
 pip install -r requirements.txt pytest httpx -q
 python3 -m pytest tests/ -v
 ```
@@ -1694,7 +1694,7 @@ CMD ["python", "main.py"]
 - [ ] **Step 9: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add api/
 git commit -m "feat(api): consumer, routes (health/resultados/historico), FastAPI main, Dockerfile"
 ```
@@ -1716,7 +1716,7 @@ git commit -m "feat(api): consumer, routes (health/resultados/historico), FastAP
 
 ```json
 {
-  "name": "magatron-frontend",
+  "name": "megatron-frontend",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -1793,7 +1793,7 @@ export default {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MAGATRON — Apuração em Tempo Real</title>
+    <title>MEGATRON — Apuração em Tempo Real</title>
   </head>
   <body class="bg-bg text-muted">
     <div id="root"></div>
@@ -1835,14 +1835,14 @@ body {
 - [ ] **Step 7: Instalar dependências**
 
 ```bash
-cd ~/Documents/Projetos/magatron/frontend
+cd ~/Documents/Projetos/megatron/frontend
 npm install
 ```
 
 - [ ] **Step 8: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add frontend/
 git commit -m "feat(frontend): Vite + React 18 + Tailwind setup"
 ```
@@ -1948,7 +1948,7 @@ describe("useElectionSocket", () => {
 - [ ] **Step 3: Executar testes — deve falhar**
 
 ```bash
-cd ~/Documents/Projetos/magatron/frontend
+cd ~/Documents/Projetos/megatron/frontend
 npx vitest run src/test/useElectionSocket.test.js
 ```
 
@@ -2014,7 +2014,7 @@ Esperado: 4 testes `PASSED`.
 - [ ] **Step 6: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add frontend/src/hooks/ frontend/src/test/
 git commit -m "feat(frontend): useElectionSocket hook with exponential backoff reconnect"
 ```
@@ -2209,7 +2209,7 @@ export function Header({ uf, cargo, connected, onUfChange, onCargoChange }) {
   return (
     <header className="flex flex-wrap items-center justify-between gap-4 mb-8 pb-4 border-b border-gray-800">
       <h1 className="text-xl font-bold tracking-wide">
-        🗳️ <span className="text-primary">MAGATRON</span>
+        🗳️ <span className="text-primary">MEGATRON</span>
       </h1>
       <div className="flex items-center gap-3">
         <select
@@ -2236,7 +2236,7 @@ export function Header({ uf, cargo, connected, onUfChange, onCargoChange }) {
 - [ ] **Step 7: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add frontend/src/components/
 git commit -m "feat(frontend): dashboard components — table, charts, progress bar, header"
 ```
@@ -2363,7 +2363,7 @@ EXPOSE 3000
 - [ ] **Step 4: Build de teste do frontend**
 
 ```bash
-cd ~/Documents/Projetos/magatron/frontend
+cd ~/Documents/Projetos/megatron/frontend
 npm run build
 ```
 
@@ -2372,7 +2372,7 @@ Esperado: `dist/` criado sem erros.
 - [ ] **Step 5: Commit**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add frontend/src/App.jsx frontend/Dockerfile frontend/nginx.conf
 git commit -m "feat(frontend): App.jsx dashboard completo, Dockerfile multi-stage nginx"
 ```
@@ -2434,7 +2434,7 @@ if __name__ == "__main__":
 - [ ] **Step 2: Subir a stack completa em modo dev**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 
 # Copiar .env se ainda não existe
 cp .env.example .env
@@ -2454,7 +2454,7 @@ docker compose --profile dev up --wait
 ```bash
 docker compose exec api python -c "
 import asyncio, os
-os.environ['POSTGRES_URL'] = 'postgresql://magatron:change-me-in-production@timescaledb/magatron'
+os.environ['POSTGRES_URL'] = 'postgresql://megatron:change-me-in-production@timescaledb/megatron'
 import sys; sys.path.insert(0, '/app')
 from db import get_pool
 import asyncpg
@@ -2479,7 +2479,7 @@ asyncio.run(seed())
 
 Ou rodar diretamente:
 ```bash
-POSTGRES_URL="postgresql://magatron:change-me-in-production@localhost:5432/magatron" \
+POSTGRES_URL="postgresql://megatron:change-me-in-production@localhost:5432/megatron" \
   python3 scripts/seed_db.py
 ```
 
@@ -2520,7 +2520,7 @@ Verificar: header com seletor, progress bar aparece após ~60s (primeiro ciclo d
 - [ ] **Step 7: Commit final**
 
 ```bash
-cd ~/Documents/Projetos/magatron
+cd ~/Documents/Projetos/megatron
 git add scripts/test_endpoints.py
 git commit -m "feat(scripts): smoke test for all services"
 ```
