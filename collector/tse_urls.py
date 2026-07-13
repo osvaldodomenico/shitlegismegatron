@@ -4,6 +4,8 @@ Gera as tarefas de coleta (URL → Redis stream) a partir de
 combinações UF × cargo.
 """
 
+from itertools import product
+
 # Mapeamento cargo → código TSE
 CARGO_CODIGOS = {
     "presidente":   "0001",
@@ -34,11 +36,13 @@ def url_fixos(base: str, ele: str, cargo: str) -> str:
 
 def gerar_tarefas(ele: str, ufs: list[str], cargos: list[str]) -> list[dict]:
     """
-    Retorna lista de dicts com url e stream para cada par UF × cargo (zip).
-    O stream Redis segue o padrão megatron:{uf}:{cargo_nome}.
+    Retorna lista de dicts com url e stream para cada par UF × cargo.
+    Usa itertools.product (cruzamento cartesiano) — antes era zip(),
+    que silenciava quando ufs/cargos tinham tamanhos diferentes,
+    deixando metade dos streams vazios.
     """
     tarefas = []
-    for uf, cargo_nome in zip(ufs, cargos):
+    for uf, cargo_nome in product(ufs, cargos):
         codigo = CARGO_CODIGOS.get(cargo_nome, "0003")
         tarefas.append({
             "url": url_resultado(base="{base}", ele=ele, uf=uf, cargo=codigo),
