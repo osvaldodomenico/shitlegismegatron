@@ -65,11 +65,30 @@ services:
     build: ./frontend
     ports: ["3000:3000"]
     environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
+      VITE_API_URL: ${VITE_API_URL:-https://${MEGATRON_DOMAIN}}
+      VITE_WS_URL: ${VITE_WS_URL:-wss://${MEGATRON_DOMAIN}}
     depends_on:
       - api
+
+  caddy:
+    build: ./caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CLOUDFLARE_API_TOKEN: ${CLOUDFLARE_API_TOKEN}
+      MEGATRON_DOMAIN: ${MEGATRON_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - frontend
 
 volumes:
   redis_data:
   pg_data:
+  caddy_data:
+  caddy_config:
