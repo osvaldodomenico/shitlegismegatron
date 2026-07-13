@@ -1,0 +1,77 @@
+# docker-compose.vps.yml
+# Adaptado para VPS 74.208.68.101 que já roda sentinela.
+# - Redis em porta 6380 (isolado do sentinela em 6379)
+# - Sem collector (substituído por simulator)
+# - Sem timescaledb (sem DB nesta versão; historico retorna vazio)
+# - Sem expor portas publicamente (apenas localhost)
+# - API roda com POSTGRES_URL propositalmente ausente
+
+version: "3.9"
+
+services:
+  megatron-redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--port", "6380", "--appendonly", "no", "--save", ""]
+    ports:
+      - "127.0.0.1:6380:6380"
+    volumes:
+      - megatron_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6380", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - megatron_net
+    restart: unless-stopped
+
+  megatron-simulator:
+    build: ./simulator
+    environment:
+      DURACAO_SIMULACAO: ${DURACAO_SIMULACAO:-3600}
+    ports:
+      - "127.0.0.1:8001:8001"
+    networks:
+      - megatron_net
+    restart: unless-stopped
+
+  megatron-collector:
+    build: ./collector
+    environment:
+      TSE_BASE_URL: http://megatron-simulator:8001/oficial/ele2026
+      REDIS_URL: redis://megatron-redis:6380
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      ELE_1T: ${ELE_1T:-001}
+      UFS: ${UFS:-sp,rj,mg}
+      CARGOS: ${CARGOS:-governador}
+    depends_on:
+      megatron-redis:
+        condition: service_healthy
+    networks:
+      - megatron_net
+    restart: unless-stopped
+
+  megatron-api:
+    build: ./api
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      REDIS_URL: redis://megatron-redis:6380
+      # POSTGRES_URL propositalmente ausente: modo no-DB
+      UFS: ${UFS:-sp,rj,mg}
+      CARGOS: ${CARGOS:-governador}
+    depends_on:
+      megatron-redis:
+        condition: service_healthy
+      megatron-simulator:
+        condition: service_started
+    networks:
+      - megatron_net
+    restart: unless-stopped
+
+volumes:
+  megatron_redis_data:
+
+networks:
+  megatron_net:
+    driver: bridge
