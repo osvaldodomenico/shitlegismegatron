@@ -1,7 +1,11 @@
 # MEGATRON — reverse proxy via Caddy
 # Domínio: megatron.shiftworks.app.br (Cloudflare proxy ON)
-# TLS: emitido via DNS-01 challenge (módulo Cloudflare).
-# Token configurado em .env (CLOUDFLARE_API_TOKEN).
+# TLS: emitido via DNS-01 challenge (módulo cloudflare embutido).
+
+{
+    # Habilita o módulo DNS Cloudflare em escopo global.
+    acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+}
 
 {$MEGATRON_DOMAIN: megatron.shiftworks.app.br} {
     encode gzip zstd
@@ -22,11 +26,6 @@
     # Fallback: assets estáticos do frontend React (Vite)
     handle /assets/* {
         reverse_proxy megatron-frontend:3000
-    }
-
-    # Health endpoint para checagem rápida via TLS
-    handle /health {
-        reverse_proxy megatron-api:8000
     }
 
     log {
