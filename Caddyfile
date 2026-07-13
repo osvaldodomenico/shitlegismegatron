@@ -1,31 +1,42 @@
 # MEGATRON — reverse proxy via Caddy
 # Domínio: megatron.shiftworks.app.br (Cloudflare proxy ON)
 # TLS: emitido via DNS-01 challenge (módulo cloudflare embutido).
+#
+# IMPORTANTE: IPs diretos dos containers (não hostnames) — o DNS interno
+# do Docker às vezes falha para resolver nomes de outros containers
+# quando o daemon está stale.
+#
+# Para descobrir IPs atualizados:
+#   docker inspect megatron-api-1 --format '{{.NetworkSettings.Networks.megatron_default.IPAddress}}'
+#   docker inspect megatron-frontend-1 --format '{{.NetworkSettings.Networks.megatron_default.IPAddress}}'
 
 {
-    # Habilita o módulo DNS Cloudflare em escopo global.
     acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
 }
 
 {$MEGATRON_DOMAIN: megatron.shiftworks.app.br} {
     encode gzip zstd
 
-    # Reverse proxy para a API FastAPI (REST + WebSocket).
-    # Mantém o path original — frontend fala direto em /resultados, /historico, /ws.
-    reverse_proxy megatron-api:8000 {
-        header_up Host {host}
-        header_up X-Real-IP {remote}
-        header_up X-Forwarded-For {remote}
-        header_up X-Forwarded-Proto {scheme}
+    # 1) API: rotas REST + WebSocket (paths com prefixo /api ou raízes)
+    @api {
+        path /health
+        path /resultados/*
+        path /historico/*
+        path /ws/*
+    }
+    reverse_proxy @api 172.18.0.6:8000 {
         transport http {
             dial_timeout 30s
             response_header_timeout 30s
         }
     }
 
-    # Fallback: assets estáticos do frontend React (Vite)
-    handle /assets/* {
-        reverse_proxy megatron-frontend:3000
+    # 2) Frontend: tudo o mais (HTML, JS, CSS, /assets/*)
+    reverse_proxy 172.18.0.7:3000 {
+        transport http {
+            dial_timeout 30s
+            response_header_timeout 30s
+        }
     }
 
     log {
