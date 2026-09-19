@@ -1,7 +1,15 @@
 version: "3.9"
 
+x-logging: &logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 services:
   redis:
+    <<: *logging
     image: redis:7-alpine
     ports: ["6379:6379"]
     volumes: ["redis_data:/data"]
@@ -12,6 +20,7 @@ services:
       retries: 5
 
   timescaledb:
+    <<: *logging
     image: timescale/timescaledb:latest-pg15
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -26,6 +35,7 @@ services:
       retries: 10
 
   simulator:
+    <<: *logging
     build: ./simulator
     ports: ["8001:8001"]
     environment:
@@ -33,6 +43,7 @@ services:
     profiles: ["dev"]
 
   collector:
+    <<: *logging
     build: ./collector
     environment:
       TSE_BASE_URL: ${TSE_BASE_URL}
@@ -49,6 +60,7 @@ services:
         condition: service_healthy
 
   api:
+    <<: *logging
     build: ./api
     ports: ["8000:8000"]
     environment:
@@ -63,6 +75,7 @@ services:
         condition: service_healthy
 
   frontend:
+    <<: *logging
     build: ./frontend
     ports: ["3000:3000"]
     environment:
@@ -72,6 +85,7 @@ services:
       - api
 
   caddy:
+    <<: *logging
     build: ./caddy
     restart: unless-stopped
     ports:
