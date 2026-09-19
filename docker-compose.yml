@@ -76,11 +76,14 @@ services:
 
   frontend:
     <<: *logging
-    build: ./frontend
+    # As VITE_* sao resolvidas pelo Vite em BUILD time — precisam ser build args,
+    # senao o bundle sai apontando para o default localhost:8000 do Dockerfile.
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://${MEGATRON_DOMAIN}}
+        VITE_WS_URL: ${VITE_WS_URL:-wss://${MEGATRON_DOMAIN}}
     ports: ["3000:3000"]
-    environment:
-      VITE_API_URL: ${VITE_API_URL:-https://${MEGATRON_DOMAIN}}
-      VITE_WS_URL: ${VITE_WS_URL:-wss://${MEGATRON_DOMAIN}}
     depends_on:
       - api
 

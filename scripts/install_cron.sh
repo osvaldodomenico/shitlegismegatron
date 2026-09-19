@@ -2,11 +2,12 @@
 # Instala crontab de manutenção do MEGATRON:
 # - healthcheck a cada 15 minutos
 # - backup diário às 03:00
-# Logs em /var/log/megatron/
+# - logrotate dos logs em /var/log/megatron/
 
 set -euo pipefail
 
 CRON_FILE="/etc/cron.d/megatron"
+LOGROTATE_FILE="/etc/logrotate.d/megatron"
 SCRIPTS_DIR="/opt/megatron/scripts"
 LOG_DIR="/var/log/megatron"
 
@@ -27,12 +28,28 @@ EOF
 
 chmod 0644 "$CRON_FILE"
 
+# Rotacao dos logs do proprio MEGATRON (healthcheck.log cresce sem limite)
+cat > "$LOGROTATE_FILE" <<EOF
+${LOG_DIR}/*.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+EOF
+
+chmod 0644 "$LOGROTATE_FILE"
+
 # Recarrega cron (debian/ubuntu)
 if command -v systemctl >/dev/null 2>&1; then
     systemctl reload cron 2>/dev/null || systemctl reload crond 2>/dev/null || true
 fi
 
 echo "Crontab instalado em $CRON_FILE"
+echo "Logrotate instalado em $LOGROTATE_FILE"
 echo
 echo "Entradas ativas:"
 crontab -l 2>/dev/null || true
