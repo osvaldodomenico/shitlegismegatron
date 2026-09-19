@@ -26,7 +26,7 @@ async def test_publish_usa_maxlen():
 @pytest.mark.asyncio
 async def test_publish_serializa_json():
     mock_redis = AsyncMock()
-    data = {"pst": "73.45%", "hor": "22:05:00"}
+    data = {"pst": "73,45", "hg": "22:05:00"}
     await publish(mock_redis, "megatron:sp:governador", data)
     fields = mock_redis.xadd.call_args[0][1]
     parsed = json.loads(fields["data"])

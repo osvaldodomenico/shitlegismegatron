@@ -39,6 +39,7 @@ services:
       REDIS_URL: ${REDIS_URL}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
       ELE_1T: ${ELE_1T}
+      ELE_1T_BR: ${ELE_1T_BR:-}
       UFS: ${UFS:-sp,rj,mg}
       CARGOS: ${CARGOS:-governador}
     depends_on:

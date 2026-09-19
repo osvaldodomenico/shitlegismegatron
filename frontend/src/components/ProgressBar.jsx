@@ -1,5 +1,7 @@
+import { num } from "../lib/tse";
+
 export function ProgressBar({ pst }) {
-  const pct = parseFloat(pst?.replace("%", "") || 0);
+  const pct = num(pst);
   return (
     <div className="mb-6">
       <div className="flex justify-between text-sm text-gray-400 mb-1">

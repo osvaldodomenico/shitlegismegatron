@@ -17,4 +17,4 @@ async def publish(redis_client: aioredis.Redis, stream: str, data: dict) -> None
         "data": json.dumps(data, ensure_ascii=False),
     }
     await redis_client.xadd(stream, payload, maxlen=1000)
-    print(f"[publisher] → {stream} | pst={data.get('pst', '?')} | hor={data.get('hor', '?')}")
+    print(f"[publisher] → {stream} | pst={data.get('pst', '?')} | hg={data.get('hg', '?')}")

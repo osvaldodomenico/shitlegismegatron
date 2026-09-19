@@ -1,3 +1,4 @@
+import { num } from "../lib/tse";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const CORES = ["#1565C0", "#2E7D32", "#E65100", "#7B1FA2"];
@@ -6,7 +7,7 @@ export function ResultadoChart({ candidatos = [] }) {
   if (!candidatos.length) return null;
   const dados = candidatos.map((c) => ({
     nome: c.nm.split(" ")[0],
-    votos: parseInt(c.vap || 0),
+    votos: num(c.vap),
   }));
 
   return (

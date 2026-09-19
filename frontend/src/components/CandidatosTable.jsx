@@ -1,3 +1,5 @@
+import { num, situacao, partido } from "../lib/tse";
+
 const SITUACAO_COLORS = {
   "Eleito": "text-green-400",
   "Não eleito": "text-gray-400",
@@ -6,7 +8,7 @@ const SITUACAO_COLORS = {
 
 export function CandidatosTable({ candidatos = [] }) {
   if (!candidatos.length) return null;
-  const maxVotos = Math.max(...candidatos.map((c) => parseInt(c.vap || 0)));
+  const maxVotos = Math.max(...candidatos.map((c) => num(c.vap)));
 
   return (
     <div className="bg-surface rounded-xl overflow-hidden mb-6">
@@ -22,14 +24,17 @@ export function CandidatosTable({ candidatos = [] }) {
         </thead>
         <tbody>
           {candidatos.map((c) => {
-            const votos = parseInt(c.vap || 0);
-            const pct = parseFloat(c.pvap?.replace("%", "") || 0);
+            const votos = num(c.vap);
+            const pct = num(c.pvap);
             const barW = maxVotos > 0 ? (votos / maxVotos) * 100 : 0;
+            const st = situacao(c);
             return (
               <tr key={c.sqcand} className="border-t border-gray-800 hover:bg-gray-900/30">
                 <td className="px-4 py-3">
                   <span className="font-medium">{c.nm}</span>
-                  <span className="text-gray-500 text-xs ml-2">{c.sg} · nº {c.n}</span>
+                  <span className="text-gray-500 text-xs ml-2 line-clamp-1">
+                    {partido(c)} · nº {c.n}
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-right">{votos.toLocaleString("pt-BR")}</td>
                 <td className="px-4 py-3 text-right font-mono">{pct.toFixed(2)}%</td>
@@ -41,7 +46,7 @@ export function CandidatosTable({ candidatos = [] }) {
                     <span className="text-xs w-10 text-right">{pct.toFixed(1)}%</span>
                   </div>
                 </td>
-                <td className={`px-4 py-3 ${SITUACAO_COLORS[c.e] || "text-gray-400"}`}>{c.e}</td>
+                <td className={`px-4 py-3 ${SITUACAO_COLORS[st] || "text-gray-400"}`}>{st}</td>
               </tr>
             );
           })}

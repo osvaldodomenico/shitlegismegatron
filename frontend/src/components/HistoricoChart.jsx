@@ -1,10 +1,11 @@
+import { num } from "../lib/tse";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 export function HistoricoChart({ historico = [] }) {
   if (!historico.length) return null;
   const dados = [...historico].reverse().map((h) => ({
     hora: new Date(h.time).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-    pct: parseFloat(h.pst_pct),
+    pct: num(h.pst_pct),
   }));
 
   return (

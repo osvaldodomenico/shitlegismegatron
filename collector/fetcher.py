@@ -16,8 +16,12 @@ HEADERS = {
     "Referer": "https://resultados.tse.jus.br/",
 }
 
-# Campos obrigatórios no payload TSE
-REQUIRED_KEYS = frozenset({"pst", "e", "hor"})
+# Campos obrigatórios no payload TSE (dados-simplificados, sufixo -r).
+# Confirmados contra a CDN em producao:
+#   pst  -> % de secoes totalizadas, string com virgula decimal ("100,00")
+#   cand -> lista de candidatos no TOPO do payload (nao aninhada)
+#   hg   -> hora da geracao do arquivo ("12:07:13")
+REQUIRED_KEYS = frozenset({"pst", "cand", "hg"})
 
 # Cache em memória: url → MD5 hash do último payload
 _snapshots: dict[str, str] = {}

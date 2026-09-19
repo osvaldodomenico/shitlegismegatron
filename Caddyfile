@@ -1,38 +1,36 @@
 # MEGATRON — reverse proxy via Caddy
-# Domínio: megatron.shiftworks.app.br (Cloudflare proxy ON)
-# TLS: emitido via DNS-01 challenge (módulo cloudflare embutido).
+# Dominio: megatron.shiftworks.app.br (Cloudflare proxy ON)
+# TLS: emitido via DNS-01 challenge (modulo cloudflare embutido).
 #
-# IMPORTANTE: IPs diretos dos containers (não hostnames) — o DNS interno
-# do Docker às vezes falha para resolver nomes de outros containers
-# quando o daemon está stale.
-#
-# Para descobrir IPs atualizados:
-#   docker inspect megatron-api-1 --format '{{.NetworkSettings.Networks.megatron_default.IPAddress}}'
-#   docker inspect megatron-frontend-1 --format '{{.NetworkSettings.Networks.megatron_default.IPAddress}}'
+# Upstreams por NOME DE SERVICO do compose (api, frontend), resolvidos pelo
+# DNS interno do Docker. A versao anterior fixava os IPs dos containers
+# (172.18.0.6 / 172.18.0.7): qualquer `docker compose up` que recriasse um
+# container mudava o IP e derrubava o site ate alguem editar este arquivo
+# na mao. Com nome de servico, o proxy sobrevive a recriacao.
 
 {
     acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
 }
 
-{$MEGATRON_DOMAIN: megatron.shiftworks.app.br} {
+{$MEGATRON_DOMAIN:megatron.shiftworks.app.br} {
     encode gzip zstd
 
-    # 1) API: rotas REST + WebSocket (paths com prefixo /api ou raízes)
+    # 1) API: rotas REST + WebSocket
     @api {
         path /health
         path /resultados/*
         path /historico/*
         path /ws/*
     }
-    reverse_proxy @api 172.18.0.6:8000 {
+    reverse_proxy @api api:8000 {
         transport http {
             dial_timeout 30s
             response_header_timeout 30s
         }
     }
 
-    # 2) Frontend: tudo o mais (HTML, JS, CSS, /assets/*)
-    reverse_proxy 172.18.0.7:3000 {
+    # 2) Frontend: todo o resto (HTML, JS, CSS, /assets/*)
+    reverse_proxy frontend:3000 {
         transport http {
             dial_timeout 30s
             response_header_timeout 30s

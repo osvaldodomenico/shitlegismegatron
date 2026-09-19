@@ -1,6 +1,6 @@
 import { StatusBanner } from "./StatusBanner";
 
-const UFS_OPCOES = ["sp", "rj", "mg", "rs", "ba", "pr", "pe", "ce", "pa", "sc"];
+const UFS_OPCOES = ["br", "sp", "rj", "mg", "rs", "ba", "pr", "pe", "ce", "pa", "sc"];
 const CARGOS_OPCOES = ["governador", "presidente", "senador", "dep_federal", "dep_estadual"];
 
 const CARGO_LABELS = {
@@ -24,7 +24,7 @@ export function Header({ uf, cargo, connected, onUfChange, onCargoChange }) {
           onChange={(e) => onUfChange(e.target.value)}
         >
           {UFS_OPCOES.map((u) => (
-            <option key={u} value={u}>{u.toUpperCase()}</option>
+            <option key={u} value={u}>{u === "br" ? "BRASIL" : u.toUpperCase()}</option>
           ))}
         </select>
         <select

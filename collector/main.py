@@ -17,7 +17,12 @@ from tse_urls import gerar_tarefas, CARGO_CODIGOS
 
 TSE_BASE_URL = os.environ["TSE_BASE_URL"]
 REDIS_URL = os.environ["REDIS_URL"]
+# Codigos de eleicao do TSE. O TSE usa um codigo por ABRANGENCIA:
+#   ELE_1T     -> eleicoes por UF   (governador, senador, dep. federal/estadual)
+#   ELE_1T_BR  -> eleicao nacional  (presidente, abrangencia "br")
+# Se ELE_1T_BR nao for definido, cai no mesmo valor de ELE_1T.
 ELE_1T = os.environ.get("ELE_1T", "001")
+ELE_1T_BR = os.environ.get("ELE_1T_BR") or ELE_1T
 INTERVALO = int(os.environ.get("POLL_INTERVAL_SECONDS", "60"))
 
 _ufs_raw = os.environ.get("UFS", "sp,rj,mg")
@@ -25,7 +30,9 @@ _cargos_raw = os.environ.get("CARGOS", "governador")
 UFS = [u.strip() for u in _ufs_raw.split(",")]
 CARGOS = [c.strip() for c in _cargos_raw.split(",")]
 
-TAREFAS = gerar_tarefas(ele=ELE_1T, ufs=UFS, cargos=CARGOS)
+TAREFAS = gerar_tarefas(
+    ele=ELE_1T, ufs=UFS, cargos=CARGOS, ele_nacional=ELE_1T_BR
+)
 
 
 async def ciclo_coleta(redis: aioredis.Redis) -> None:
@@ -67,7 +74,16 @@ async def main() -> None:
         max_instances=1,
     )
     scheduler.start()
-    print(f"[collector] Iniciado. Intervalo: {INTERVALO}s | Tarefas: {len(TAREFAS)}")
+    print(
+        f"[collector] Iniciado. Intervalo: {INTERVALO}s | Tarefas: {len(TAREFAS)} "
+        f"| ELE_1T={ELE_1T} ELE_1T_BR={ELE_1T_BR}"
+    )
+    if not TAREFAS:
+        print(
+            "[collector] AVISO: nenhuma tarefa gerada. Presidente exige 'br' em "
+            "UFS; governador/senador/deputados exigem siglas de UF.",
+            file=sys.stderr,
+        )
     for t in TAREFAS:
         print(f"  → {t['stream']}")
     await asyncio.Event().wait()

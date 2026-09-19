@@ -1,26 +1,30 @@
 """
 Templates de URL para o feed oficial do TSE.
 
-Baseado na documentacao oficial "Instrucoes para download dos arquivos da
-Divulgacao de resultados das Eleicoes 2024" (TSE, versao 1.1 de 19/08/2024).
+Esquema confirmado contra a CDN em producao (probe em 19/09/2026):
 
-Hierarquia do servidor HTTP do TSE (Data Center/CDN):
-    http://<host>/[ambiente]/[ciclo]/[eleicao]/
-        config/...
-        dados/<br|uf|zz>/
-            <uf>-c<CCCC>-e<ELEICA>-u.json   <- resultado unificado por UF
-            <uf>-c<CCCC>-e<ELEICA>-e.json   <- arquivo de eleitos (EA10)
-            <uf>-e<ELEICA>-ab.json          <- acompanhamento UF (EA15)
-        fotos/<br|uf|zz>/<sqcand>.jpeg
+    https://resultados.tse.jus.br/oficial/<ciclo>/<ELE>/dados-simplificados/
+        <abr>/<abr>-c<CCCC>-e<ELEICA>-r.json
 
-Em 2026 (ciclo ele2026), o TSE divulga o resultado oficial nesta estrutura.
-Cada arquivo de resultado unificado (sufixo -u) traz todos os candidatos do
-cargo na UF com votos atualizados — eh o mesmo arquivo que UOL/G1/Estadao
-consomem para montar suas paginas de apuracao em tempo real.
+    200  .../ele2022/544/dados-simplificados/br/br-c0001-e000544-r.json
+    200  .../ele2022/546/dados-simplificados/sp/sp-c0003-e000546-r.json
 
-Antes deste ajuste, o codigo usava o esquema antigo "dados-simplificados"
-que retornava 404 nas eleicoes recentes do TSE.
+O esquema "dados/<uf>/<uf>-c<CCCC>-e<ELEICA>-u.json" (tentado antes) retorna
+404 em todas as combinacoes testadas de 2022 e 2024 — nao existe na CDN.
+`dados-simplificados/...-r.json` eh o arquivo que UOL/G1/Estadao consomem
+para montar suas paginas de apuracao em tempo real.
+
+ABRANGENCIA — o TSE usa UM CODIGO DE ELEICAO POR ABRANGENCIA, nao por turno:
+
+    ele=544  ->  nacional: presidente, publicado sob a abrangencia "br"
+    ele=546  ->  por UF:   governador, senador, dep. federal, dep. estadual
+    ele=547  ->  2o turno de governador (por UF)
+
+Por isso `gerar_tarefas` recebe dois codigos e so cruza os pares que
+existem de fato na CDN (presidente x br; demais cargos x UF).
 """
+
+from __future__ import annotations
 
 from itertools import product
 
@@ -33,74 +37,56 @@ CARGO_CODIGOS = {
     "dep_estadual": "0007",
 }
 
+# Cargos publicados sob a abrangencia nacional ("br"), com codigo de
+# eleicao proprio. Todos os demais sao publicados por UF.
+CARGOS_NACIONAIS = frozenset({"presidente"})
+
 
 def url_resultado(base: str, ele: str, uf: str, cargo: str) -> str:
     """
-    URL de resultado unificado (EA20) por UF/cargo.
+    URL do resultado por abrangencia/cargo.
 
     Esquema oficial TSE:
-        {base}/{ele}/dados/{uf}/{uf}-c{cargo}-e{ele_padded}-u.json
+        {base}/{ele}/dados-simplificados/{uf}/{uf}-c{cargo}-e{ele_padded}-r.json
 
-    Exemplo (1T 2022, SP, governador):
-        https://resultados.tse.jus.br/oficial/ele2022/544/dados/sp/sp-c0003-e000544-u.json
+    Exemplo (presidente 1T 2022, nacional):
+        https://resultados.tse.jus.br/oficial/ele2022/544/dados-simplificados/br/br-c0001-e000544-r.json
 
-    O sufixo -u indica "unificado" — arquivo consolidado com candidatos
-    e votos apurados ate o momento.
+    Exemplo (governador 1T 2022, SP):
+        https://resultados.tse.jus.br/oficial/ele2022/546/dados-simplificados/sp/sp-c0003-e000546-r.json
     """
     ele_padded = str(ele).zfill(6)
-    return f"{base}/{ele}/dados/{uf}/{uf}-c{cargo}-e{ele_padded}-u.json"
+    return f"{base}/{ele}/dados-simplificados/{uf}/{uf}-c{cargo}-e{ele_padded}-r.json"
 
 
-def url_eleitos(base: str, ele: str, uf: str, cargo: str) -> str:
+def gerar_tarefas(
+    ele: str,
+    ufs: list[str],
+    cargos: list[str],
+    ele_nacional: str | None = None,
+) -> list[dict]:
     """
-    URL do arquivo de eleitos (EA10) por UF/cargo.
-    Disponivel a partir do momento em que o TSE fecha a apuracao.
+    Cruza UFs x cargos, descartando os pares que nao existem na CDN do TSE.
 
-    Exemplo:
-        https://resultados.tse.jus.br/oficial/ele2022/544/dados/sp/sp-c0003-e000544-e.json
+    - `ele`          codigo da eleicao por UF (governador, senador, deputados)
+    - `ele_nacional` codigo da eleicao nacional (presidente); default = `ele`
+
+    Pares descartados:
+      - cargo nacional (presidente) em abrangencia que nao seja "br"
+      - cargo de UF (governador, senador, ...) na abrangencia "br"
+    Ambos retornariam 404.
     """
-    ele_padded = str(ele).zfill(6)
-    return f"{base}/{ele}/dados/{uf}/{uf}-c{cargo}-e{ele_padded}-e.json"
-
-
-def url_acompanhamento_uf(base: str, ele: str, uf: str) -> str:
-    """
-    URL de acompanhamento UF (EA15) — historico de totalizacao por UF.
-    """
-    ele_padded = str(ele).zfill(6)
-    return f"{base}/{ele}/dados/{uf}/{uf}-e{ele_padded}-ab.json"
-
-
-def url_config_eleicoes(base: str, ciclo: str = "ele2026") -> str:
-    """
-    URL de configuracao de eleicoes (EA11).
-    Retorna lista de eleicoes (turnos) com seus codigos numericos.
-    """
-    return f"{base}/{ciclo}/config/"
-
-
-def url_fixos(base: str, ele: str, cargo: str) -> str:
-    """
-    URL de configuracao fixa (metadados de candidatos).
-
-    Mantida por compatibilidade — esquema antigo usava este path.
-    Em 2024+ nao ha mais esse arquivo; mantido aqui apenas caso
-    outro portal ainda exponha.
-    """
-    ele_padded = str(ele).zfill(6)
-    return f"{base}/{ele}/config/ele-c{cargo}-e{ele_padded}-cf.json"
-
-
-def gerar_tarefas(ele: str, ufs: list[str], cargos: list[str]) -> list[dict]:
-    """
-    Retorna lista de dicts com url e stream para cada par UF x cargo.
-    Usa itertools.product (cruzamento cartesiano).
-    """
+    ele_nacional = ele_nacional or ele
     tarefas = []
     for uf, cargo_nome in product(ufs, cargos):
+        eh_nacional = cargo_nome in CARGOS_NACIONAIS
+        eh_abr_br = uf == "br"
+        if eh_nacional != eh_abr_br:
+            continue
         codigo = CARGO_CODIGOS.get(cargo_nome, "0003")
+        ele_alvo = ele_nacional if eh_nacional else ele
         tarefas.append({
-            "url": url_resultado(base="{base}", ele=ele, uf=uf, cargo=codigo),
+            "url": url_resultado(base="{base}", ele=ele_alvo, uf=uf, cargo=codigo),
             "stream": f"megatron:{uf}:{cargo_nome}",
             "uf": uf,
             "cargo": cargo_nome,
