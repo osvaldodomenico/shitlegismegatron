@@ -225,6 +225,38 @@ EOF
     else
         fail "nao foi possivel medir o ganho do filtro"
     fi
+
+    # Quociente e linha de corte: indicador que decide leitura de eleicao.
+    # Se o calculo quebrar, a tela passa a afirmar quem se elege com numero
+    # errado — pior do que nao mostrar nada.
+    if curl -s --max-time 40 "https://$DOMINIO/resultados/$CORRIDA?selecionados=true" -o /tmp/megatron-ind.json \
+       && [ -s /tmp/megatron-ind.json ]; then
+        if "$PY" - <<'EOF'
+import json, sys
+d = json.load(open("/tmp/megatron-ind.json"))
+i = d.get("indicadores") or {}
+qe, vagas, vv = i.get("quociente_eleitoral"), i.get("vagas"), i.get("votos_validos")
+if not (qe and vagas and vv):
+    sys.exit(1)
+# art. 106 do Codigo Eleitoral: despreza fracao <= 0,5
+bruto = vv / vagas
+esperado = int(bruto) + (1 if (bruto - int(bruto)) > 0.5 else 0)
+if qe != esperado:
+    sys.exit(1)
+if i.get("barreira_individual") != int(qe * 0.10):
+    sys.exit(1)
+# todo acompanhado precisa trazer o bloco de indicadores e a foto
+for c in d.get("cand") or []:
+    if not c.get("ind") or not c.get("foto"):
+        sys.exit(1)
+sys.exit(0)
+EOF
+        then pass "quociente, barreira e linha de corte conferem com a lei"
+        else fail "indicadores de apuracao ausentes ou divergentes"
+        fi
+    else
+        fail "nao foi possivel ler os indicadores de apuracao"
+    fi
 fi
 
 # -------------------------------------------------------------- resultado

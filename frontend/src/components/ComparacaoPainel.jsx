@@ -1,16 +1,34 @@
-import { num, partido, situacao } from "../lib/tse";
+import { num } from "../lib/tse";
+import { CandidatoCard } from "./CandidatoCard";
 import { IconUsers, IconPlus } from "./icons";
 
-/**
- * Comparacao ao vivo dos candidatos acompanhados.
- *
- * As barras sao proporcionais ao LIDER DA SELECAO, nao ao total de votos
- * validos: com deputado federal o maior tem ~4% e barras contra 100%
- * ficariam todas invisiveis. O percentual real (contra os validos) continua
- * escrito ao lado, para nao enganar a leitura.
- */
 const CORES = ["bg-s1", "bg-s2", "bg-s3", "bg-s4", "bg-s5"];
 const TEXTO = ["text-s1", "text-s2", "text-s3", "text-s4", "text-s5"];
+
+/** Regras da corrida: o contexto sem o qual nenhuma margem faz sentido. */
+function FaixaIndicadores({ ind }) {
+  if (!ind || !ind.quociente_eleitoral) return null;
+  const item = (rotulo, valor, dica) => (
+    <div key={rotulo} className="min-w-0">
+      <dt className="text-[10px] uppercase tracking-wider text-faint">{rotulo}</dt>
+      <dd className="num font-mono text-sm font-semibold text-muted" title={dica}>{valor}</dd>
+    </div>
+  );
+  return (
+    <dl className="mb-4 flex flex-wrap items-start gap-x-6 gap-y-3 rounded-xl border border-line bg-elevated/50 px-4 py-3">
+      {item("Quociente eleitoral", ind.quociente_eleitoral.toLocaleString("pt-BR"),
+            "Votos válidos divididos pelo número de vagas")}
+      {item("Vagas", ind.vagas)}
+      {item("Barreira individual", ind.barreira_individual.toLocaleString("pt-BR"),
+            "10% do quociente eleitoral — abaixo disso o candidato não se elege")}
+      {ind.parcial && (
+        <div className="basis-full text-[11px] text-accent">
+          Apuração parcial: o quociente ainda vai subir até o fim da totalização.
+        </div>
+      )}
+    </dl>
+  );
+}
 
 function Vazio({ aoAbrirSeletor, cargoNome }) {
   return (
@@ -18,8 +36,8 @@ function Vazio({ aoAbrirSeletor, cargoNome }) {
       <IconUsers className="mx-auto h-10 w-10 text-faint" />
       <h3 className="mt-3 text-base font-semibold text-muted">Nenhum candidato acompanhado</h3>
       <p className="mx-auto mt-1 max-w-sm text-sm text-subtle">
-        Escolha até 5 candidatos de {cargoNome} para ver votos e percentual lado a lado,
-        atualizando ao vivo.
+        Escolha até 5 candidatos de {cargoNome} para comparar votos, posição na legenda
+        e distância da linha de corte.
       </p>
       <button
         onClick={aoAbrirSeletor}
@@ -32,12 +50,14 @@ function Vazio({ aoAbrirSeletor, cargoNome }) {
   );
 }
 
-export function ComparacaoPainel({ candidatos, cargoNome, aoAbrirSeletor, carregando }) {
+export function ComparacaoPainel({
+  candidatos, indicadores, cargoNome, aoAbrirSeletor, aoRemover, carregando, maximo = 5,
+}) {
   if (carregando) {
     return (
       <div className="space-y-3" aria-busy="true" aria-label="Carregando comparativo">
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-20 animate-pulseSoft rounded-xl border border-line bg-surface" />
+          <div key={i} className="h-32 animate-pulseSoft rounded-xl border border-line bg-surface" />
         ))}
       </div>
     );
@@ -48,80 +68,51 @@ export function ComparacaoPainel({ candidatos, cargoNome, aoAbrirSeletor, carreg
   }
 
   const lider = Math.max(...candidatos.map((c) => num(c.vap)), 1);
+  const podeAdicionar = candidatos.length < maximo;
 
   return (
     <section aria-label="Comparativo dos candidatos acompanhados">
       <header className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-faint">
-          Acompanhando {candidatos.length}
+          Acompanhando {candidatos.length} de {maximo}
         </h2>
         <button
           onClick={aoAbrirSeletor}
           className="flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-line px-3 text-sm font-medium text-subtle transition-colors duration-150 hover:bg-elevated hover:text-muted"
         >
           <IconPlus className="h-4 w-4" />
-          Alterar
+          {podeAdicionar ? "Adicionar" : "Alterar"}
         </button>
       </header>
 
+      <FaixaIndicadores ind={indicadores} />
+
       <ol className="space-y-2.5">
-        {candidatos.map((c, i) => {
-          const votos = num(c.vap);
-          const pct = num(c.pvap);
-          const st = situacao(c);
-          const eleito = /eleito/i.test(st) && !/não|nao/i.test(st);
-          return (
-            <li
-              key={c.sqcand || c.seq}
-              className="rounded-xl border border-line bg-surface p-4 transition-colors duration-150 hover:border-line/80"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    {/* Quadrado de cor + numero: a cor nunca e o unico sinal. */}
-                    <span className={`h-3 w-3 shrink-0 rounded-sm ${CORES[i % 5]}`} aria-hidden="true" />
-                    <h3 className="truncate text-base font-semibold text-muted">{c.nm}</h3>
-                  </div>
-                  <p className="mt-0.5 truncate pl-5 text-xs text-faint">
-                    <span className="num font-mono">{c.n}</span> · {partido(c)}
-                  </p>
-                </div>
-                <div className="shrink-0 text-right">
-                  <p className={`num font-mono text-xl font-bold ${TEXTO[i % 5]}`}>
-                    {pct.toFixed(2).replace(".", ",")}
-                    <span className="text-sm font-normal text-subtle">%</span>
-                  </p>
-                  <p className="num font-mono text-xs text-faint">
-                    {votos.toLocaleString("pt-BR")} votos
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-elevated">
-                <div
-                  className={`h-full rounded-full ${CORES[i % 5]} transition-[width] duration-500 ease-out`}
-                  style={{ width: `${Math.max((votos / lider) * 100, 1.5)}%` }}
-                />
-              </div>
-
-              {st && (
-                <p className="mt-2">
-                  <span
-                    className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                      eleito ? "bg-success/25 text-successLit" : "bg-elevated text-subtle"
-                    }`}
-                  >
-                    {st}
-                  </span>
-                </p>
-              )}
-            </li>
-          );
-        })}
+        {candidatos.map((c, i) => (
+          <CandidatoCard
+            key={c.sqcand || c.seq}
+            cand={c}
+            cor={CORES[i % 5]}
+            corTexto={TEXTO[i % 5]}
+            proporcao={(num(c.vap) / lider) * 100}
+            aoRemover={aoRemover}
+          />
+        ))}
       </ol>
 
+      {podeAdicionar && (
+        <button
+          onClick={aoAbrirSeletor}
+          className="mt-2.5 flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-line text-sm font-medium text-subtle transition-colors duration-150 hover:border-primaryLit hover:text-muted"
+        >
+          <IconPlus className="h-4 w-4" />
+          Adicionar candidato ({maximo - candidatos.length} vaga(s))
+        </button>
+      )}
+
       <p className="mt-3 text-xs text-faint">
-        Barras proporcionais ao primeiro colocado da seleção. O percentual é sobre o total de votos válidos.
+        Barras proporcionais ao primeiro colocado da seleção. Percentual sobre os votos válidos.
+        A linha de corte usa a situação publicada pelo TSE para cada agremiação.
       </p>
     </section>
   );

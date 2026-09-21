@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
+import apuracao
 import consumer
 import selecao as sel
 
@@ -21,5 +22,7 @@ async def get_resultado(uf: str, cargo: str, selecionados: bool = False):
     if snap is None:
         raise HTTPException(status_code=404, detail="Sem dados ainda")
     if selecionados:
-        return sel.filtrar(snap, sel.get(uf, cargo))
+        # preparar() calcula quociente e linha de corte sobre a corrida
+        # inteira e so entao recorta — ver apuracao.preparar.
+        return apuracao.preparar(snap, uf, sel.get(uf, cargo))
     return snap

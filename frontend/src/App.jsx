@@ -90,6 +90,18 @@ export default function App() {
     }
   }, [uf, cargo]);
 
+  // Remocao direta pelo card: mesma gravacao da selecao, sem abrir o seletor.
+  async function removerCandidato(sqcand) {
+    const restantes = selecao.filter((s) => s !== sqcand);
+    setSelecao(restantes);                 // resposta imediata na tela
+    try {
+      await api.salvarSelecao(uf, cargo, restantes);
+    } catch (e) {
+      setSelecao(selecao);                 // desfaz se o servidor recusar
+      setErro(e.message);
+    }
+  }
+
   async function confirmarSelecao(sqcands) {
     setSalvando(true);
     setErro("");
@@ -144,9 +156,12 @@ export default function App() {
             <div className="lg:col-span-3">
               <ComparacaoPainel
                 candidatos={filtrando ? cands : []}
+                indicadores={data?.indicadores}
                 cargoNome={cargoNome}
                 aoAbrirSeletor={abrirSeletor}
+                aoRemover={removerCandidato}
                 carregando={carregando}
+                maximo={maximo}
               />
             </div>
 

@@ -10,6 +10,7 @@ from typing import Optional, Dict
 
 import redis.asyncio as aioredis
 
+import apuracao
 import selecao as sel
 from db import salvar_snapshot
 from ws_manager import ConnectionManager
@@ -122,7 +123,10 @@ async def start_consumer(manager: ConnectionManager, pool) -> None:
                     if escolhidos and manager.rooms.get(f"{room}:sel"):
                         await manager.broadcast(
                             f"{room}:sel",
-                            json.dumps(sel.filtrar(data, escolhidos), ensure_ascii=False),
+                            json.dumps(
+                                apuracao.preparar(data, uf_b, escolhidos),
+                                ensure_ascii=False,
+                            ),
                         )
 
                     # persist to TimescaleDB
