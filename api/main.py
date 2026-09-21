@@ -15,6 +15,7 @@ from routes.health import router as health_router
 from routes.resultados import router as resultados_router
 from routes.historico import router as historico_router
 from routes.selecao import router as selecao_router
+from routes.corridas import router as corridas_router
 import selecao as sel
 import db as _db
 
@@ -31,6 +32,7 @@ app.include_router(health_router)
 app.include_router(resultados_router)
 app.include_router(historico_router)
 app.include_router(selecao_router)
+app.include_router(corridas_router)
 
 manager = ConnectionManager()
 _consumer_task = None

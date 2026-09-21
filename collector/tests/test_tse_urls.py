@@ -72,3 +72,29 @@ def test_gerar_tarefas_deputado_federal():
 def test_gerar_tarefas_lista_vazia():
     assert gerar_tarefas(ele="546", ufs=[], cargos=["governador"]) == []
     assert gerar_tarefas(ele="546", ufs=["sp"], cargos=[]) == []
+
+
+def test_caminho_e_sufixo_vem_de_env(monkeypatch):
+    """
+    Se o TSE mudar o caminho em 04/10, a saida tem que ser trocavel pelo .env,
+    sem rebuild. Recarrega o modulo porque a leitura do env e no import.
+    """
+    import importlib
+    import tse_urls
+
+    monkeypatch.setenv("TSE_PATH_DADOS", "dados")
+    monkeypatch.setenv("TSE_SUFIXO", "u")
+    importlib.reload(tse_urls)
+    try:
+        u = tse_urls.url_resultado("BASE", "546", "sp", "0006")
+        assert u == "BASE/546/dados/sp/sp-c0006-e000546-u.json"
+    finally:
+        monkeypatch.delenv("TSE_PATH_DADOS")
+        monkeypatch.delenv("TSE_SUFIXO")
+        importlib.reload(tse_urls)
+
+
+def test_padrao_continua_dados_simplificados():
+    import tse_urls
+    u = tse_urls.url_resultado("BASE", "546", "sp", "0006")
+    assert u == "BASE/546/dados-simplificados/sp/sp-c0006-e000546-r.json"

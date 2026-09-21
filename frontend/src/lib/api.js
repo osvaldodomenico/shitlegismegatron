@@ -48,3 +48,8 @@ export function buscarResultado(uf, cargo, apenasSelecionados = false) {
   const q = apenasSelecionados ? "?selecionados=true" : "";
   return json(`/resultados/${uf}/${cargo}${q}`);
 }
+
+/** Corridas que o backend realmente coleta — fonte dos seletores. */
+export function buscarCorridas() {
+  return json("/corridas");
+}

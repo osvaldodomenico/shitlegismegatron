@@ -160,23 +160,30 @@ EOF
                             || fail "/resultados entrega payload em formato antigo"
         fi
 
-        idade="$("$PY" - <<'EOF'
+        # Liveness do collector, NAO a data dentro do boletim. O fetcher so
+        # publica quando o payload muda, entao "dado antigo" pode ser silencio
+        # legitimo — durante um replay de eleicao passada, sempre e. O sinal
+        # honesto e o heartbeat que o collector grava a cada ciclo.
+        if curl -s --max-time 20 "https://$DOMINIO/health" -o /tmp/megatron-health.json \
+           && "$PY" - <<'EOF'
 import json, sys
-from datetime import datetime
-d = json.load(open("/tmp/megatron-prod.json"))
-try:
-    dg = datetime.strptime(d.get("dg", ""), "%d/%m/%Y").date()
-    print((datetime.now().date() - dg).days)
-except Exception:
-    print(-1)
+h = json.load(open("/tmp/megatron-health.json"))
+c = h.get("coletor") or {}
+if c.get("estado") != "ok":
+    print(f"coletor em '{c.get('estado')}': {c.get('detalhe', '')}", file=sys.stderr)
+    sys.exit(1)
+if (c.get("falhas_ultimo_ciclo") or 0) >= (c.get("tarefas") or 1):
+    print("todas as URLs falharam no ultimo ciclo", file=sys.stderr)
+    sys.exit(1)
+corr = h.get("corridas") or {}
+if not corr.get("com_dado"):
+    print("nenhuma corrida com boletim", file=sys.stderr)
+    sys.exit(1)
+print(f"{corr['com_dado']}/{corr['configuradas']} corridas com dado, "
+      f"heartbeat {c['idade_segundos']}s")
 EOF
-)"
-        if [ "$idade" = "0" ]; then
-            pass "dado de producao e de hoje"
-        elif [ "$idade" = "-1" ]; then
-            fail "nao foi possivel ler a data do snapshot"
-        else
-            fail "dado de producao congelado ha ${idade} dia(s) — collector parado"
+        then pass "collector coletando (heartbeat fresco)"
+        else fail "collector parado ou sem coletar — ver /health"
         fi
     else
         fail "/resultados nao respondeu"

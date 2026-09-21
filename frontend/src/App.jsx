@@ -21,6 +21,7 @@ export default function App() {
   const [uf, setUf] = useState("sp");
   const [cargo, setCargo] = useState("governador");
   const [historico, setHistorico] = useState([]);
+  const [corridas, setCorridas] = useState([]);
 
   const [selecao, setSelecao] = useState([]);
   const [maximo, setMaximo] = useState(5);
@@ -40,17 +41,35 @@ export default function App() {
   const cands = lerCandidatos(data);
   const hora = horaAtualizacao(data);
 
-  // Presidente so existe em "br"; os demais cargos so existem por UF.
-  function trocarCargo(novo) {
-    setCargo(novo);
-    if (novo === "presidente") setUf("br");
-    else if (uf === "br") setUf("sp");
-  }
+  // A coerencia uf x cargo agora vem do proprio backend: so existe na lista
+  // o que ele coleta. Ao trocar de UF, mantem o cargo se existir la; senao
+  // cai no primeiro disponivel daquela UF.
+  function trocarCargo(novo) { setCargo(novo); }
   function trocarUf(nova) {
     setUf(nova);
-    if (nova === "br") setCargo("presidente");
-    else if (cargo === "presidente") setCargo("governador");
+    const daUf = corridas.filter((c) => c.uf === nova);
+    if (daUf.length && !daUf.some((c) => c.cargo === cargo)) setCargo(daUf[0].cargo);
   }
+
+  // Corridas realmente coletadas. Ate chegarem, o Header nao renderiza — e
+  // preferivel nao mostrar seletor a mostrar um que oferece o que nao existe.
+  useEffect(() => {
+    let vivo = true;
+    api.buscarCorridas()
+      .then((r) => {
+        if (!vivo) return;
+        const lista = r.corridas || [];
+        setCorridas(lista);
+        // Se a combinacao atual nao e coletada, cai na primeira que e.
+        if (lista.length && !lista.some((c) => c.uf === uf && c.cargo === cargo)) {
+          setUf(lista[0].uf);
+          setCargo(lista[0].cargo);
+        }
+      })
+      .catch(() => { if (vivo) setCorridas([]); });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Selecao vigente da corrida (compartilhada entre todos).
   useEffect(() => {
@@ -116,8 +135,8 @@ export default function App() {
     }
   }
 
-  const ufNome = UF_NOMES[uf] || uf.toUpperCase();
-  const cargoNome = CARGO_LABELS[cargo] || cargo;
+  const ufNome = corridas.find((c) => c.uf === uf)?.uf_nome || UF_NOMES[uf] || uf.toUpperCase();
+  const cargoNome = corridas.find((c) => c.uf === uf && c.cargo === cargo)?.cargo_nome || CARGO_LABELS[cargo] || cargo;
   const semDados = !carregando && cands.length === 0 && !filtrando;
 
   return (
@@ -125,6 +144,7 @@ export default function App() {
       <Header
         uf={uf}
         cargo={cargo}
+        corridas={corridas}
         connected={connected}
         onUfChange={trocarUf}
         onCargoChange={trocarCargo}

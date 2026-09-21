@@ -83,6 +83,9 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       TSE_BASE_URL: ${TSE_BASE_URL}
+      # Trocaveis sem rebuild caso o TSE mude o caminho em 04/10.
+      TSE_PATH_DADOS: ${TSE_PATH_DADOS:-dados-simplificados}
+      TSE_SUFIXO: ${TSE_SUFIXO:-r}
       REDIS_URL: ${REDIS_URL}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
       ELE_1T: ${ELE_1T}
@@ -129,7 +132,7 @@ services:
       traefik.enable: "true"
       traefik.docker.network: "easypanel"
       # Mesmas rotas do bloco @api do Caddyfile.
-      traefik.http.routers.megatron-api.rule: "Host(`${MEGATRON_DOMAIN}`) && (Path(`/health`) || PathPrefix(`/resultados`) || PathPrefix(`/historico`) || PathPrefix(`/ws`) || PathPrefix(`/candidatos`) || PathPrefix(`/selecao`))"
+      traefik.http.routers.megatron-api.rule: "Host(`${MEGATRON_DOMAIN}`) && (Path(`/health`) || PathPrefix(`/resultados`) || PathPrefix(`/historico`) || PathPrefix(`/ws`) || PathPrefix(`/candidatos`) || PathPrefix(`/selecao`) || PathPrefix(`/corridas`))"
       traefik.http.routers.megatron-api.entrypoints: "https"
       traefik.http.routers.megatron-api.tls: "true"
       traefik.http.routers.megatron-api.tls.certresolver: "letsencrypt"
@@ -137,7 +140,7 @@ services:
       traefik.http.routers.megatron-api.service: "megatron-api"
       traefik.http.services.megatron-api.loadbalancer.server.port: "8000"
       # HTTP -> HTTPS reusando o middleware que o EasyPanel ja define no file provider.
-      traefik.http.routers.megatron-api-http.rule: "Host(`${MEGATRON_DOMAIN}`) && (Path(`/health`) || PathPrefix(`/resultados`) || PathPrefix(`/historico`) || PathPrefix(`/ws`) || PathPrefix(`/candidatos`) || PathPrefix(`/selecao`))"
+      traefik.http.routers.megatron-api-http.rule: "Host(`${MEGATRON_DOMAIN}`) && (Path(`/health`) || PathPrefix(`/resultados`) || PathPrefix(`/historico`) || PathPrefix(`/ws`) || PathPrefix(`/candidatos`) || PathPrefix(`/selecao`) || PathPrefix(`/corridas`))"
       traefik.http.routers.megatron-api-http.entrypoints: "http"
       traefik.http.routers.megatron-api-http.priority: "100"
       traefik.http.routers.megatron-api-http.middlewares: "redirect-to-https@file"
