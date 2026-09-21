@@ -84,3 +84,57 @@ async def buscar_historico(pool: Optional[asyncpg.Pool], uf: str, cargo: str, ul
     except Exception as e:
         print(f"[db] Erro ao buscar histórico: {e}")
         return []
+
+
+async def buscar_selecao(pool: Optional[asyncpg.Pool], uf: str, cargo: str) -> List[str]:
+    """sqcands acompanhados nessa corrida. Lista vazia se pool=None ou sem linha."""
+    if pool is None:
+        return []
+    try:
+        row = await pool.fetchrow(
+            "SELECT sqcands FROM selecao WHERE uf = $1 AND cargo = $2", uf, cargo
+        )
+        return list(row["sqcands"]) if row else []
+    except Exception as e:
+        print(f"[db] Erro ao buscar selecao: {e}")
+        return []
+
+
+async def salvar_selecao(
+    pool: Optional[asyncpg.Pool], uf: str, cargo: str, sqcands: List[str]
+) -> bool:
+    """
+    Grava a selecao da corrida. Retorna False se a persistencia esta desativada,
+    para a rota poder avisar que a escolha nao sobrevive a um restart.
+    """
+    if pool is None:
+        return False
+    try:
+        await pool.execute(
+            """
+            INSERT INTO selecao (uf, cargo, sqcands, atualizado_em)
+            VALUES ($1, $2, $3, NOW())
+            ON CONFLICT (uf, cargo)
+            DO UPDATE SET sqcands = EXCLUDED.sqcands, atualizado_em = NOW()
+            """,
+            uf, cargo, sqcands,
+        )
+        return True
+    except Exception as e:
+        print(f"[db] Erro ao salvar selecao: {e}")
+        return False
+
+
+async def carregar_todas_selecoes(pool: Optional[asyncpg.Pool]) -> List[dict]:
+    """Todas as selecoes, para reidratar o cache em memoria no startup da API."""
+    if pool is None:
+        return []
+    try:
+        rows = await pool.fetch("SELECT uf, cargo, sqcands FROM selecao")
+        return [
+            {"uf": r["uf"], "cargo": r["cargo"], "sqcands": list(r["sqcands"])}
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"[db] Erro ao carregar selecoes: {e}")
+        return []

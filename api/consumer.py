@@ -10,6 +10,7 @@ from typing import Optional, Dict
 
 import redis.asyncio as aioredis
 
+import selecao as sel
 from db import salvar_snapshot
 from ws_manager import ConnectionManager
 
@@ -59,10 +60,37 @@ def parse_pst(valor) -> float:
         return 0.0
 
 
+async def hidratar_ultimos(redis: aioredis.Redis) -> int:
+    """
+    Preenche o cache `_last` com a ultima entrada ja existente em cada stream.
+
+    Sem isto, uma API reiniciada fica sem snapshot ate o collector publicar de
+    novo — e o collector so publica quando o payload MUDA (diff-hash em
+    fetcher.fetch_if_changed). Com fonte estatica (replay de eleicao passada)
+    isso nunca acontece e /resultados responde 404 indefinidamente.
+    """
+    recuperados = 0
+    for stream in STREAMS:
+        try:
+            entradas = await redis.xrevrange(stream, count=1)
+        except Exception as e:
+            print(f"[consumer] Nao consegui hidratar {stream}: {e}")
+            continue
+        for _msg_id, fields in entradas:
+            bruto = fields.get(b"data") if b"data" in fields else fields.get("data")
+            if bruto is None:
+                continue
+            _last[stream] = json.loads(bruto)
+            recuperados += 1
+    return recuperados
+
+
 async def start_consumer(manager: ConnectionManager, pool) -> None:
     """Inicia loop de consumo do Redis Stream."""
     redis = aioredis.from_url(REDIS_URL)
     streams = dict(STREAMS)
+    n = await hidratar_ultimos(redis)
+    print(f"[consumer] Cache hidratado do Redis: {n} stream(s) com dado previo.")
     print(f"[consumer] Aguardando streams: {list(streams.keys())}")
 
     while True:
@@ -84,6 +112,18 @@ async def start_consumer(manager: ConnectionManager, pool) -> None:
                     _, uf_cargo = stream_key.split(":", 1)  # "megatron:sp:governador" → "sp:governador"
                     room = uf_cargo
                     await manager.broadcast(room, json.dumps(data, ensure_ascii=False))
+
+                    # Room paralela so com os candidatos acompanhados. Em
+                    # dep_federal de SP sao ~2 KB por push em vez de ~240 KB.
+                    # So e montada se houver alguem escutando E selecao ativa,
+                    # para nao pagar o filtro a toa.
+                    uf_b, cargo_b = uf_cargo.split(":", 1)
+                    escolhidos = sel.get(uf_b, cargo_b)
+                    if escolhidos and manager.rooms.get(f"{room}:sel"):
+                        await manager.broadcast(
+                            f"{room}:sel",
+                            json.dumps(sel.filtrar(data, escolhidos), ensure_ascii=False),
+                        )
 
                     # persist to TimescaleDB
                     parts = stream_key.split(":")  # ["megatron", "sp", "governador"]

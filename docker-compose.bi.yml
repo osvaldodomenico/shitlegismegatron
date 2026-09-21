@@ -91,6 +91,31 @@ services:
         condition: service_healthy
     networks: [megatron_net]
 
+  # Fonte SEPARADA para deputado federal: a CDN REAL do TSE (apuracao de 2022,
+  # que continua publicada e estatica). O simulador gera so 5 candidatos fixos
+  # e ignora o cargo pedido, o que nao exercita um seletor de 5 entre 1429.
+  # Dois collectors convivem sem colisao porque produzem streams distintos:
+  # este publica apenas megatron:sp:dep_federal.
+  # No dia da eleicao, apontar TSE_BASE_URL/ELE_TSE para o ciclo corrente.
+  collector-tse:
+    <<: *logging
+    build: ./collector
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      TSE_BASE_URL: ${TSE_BASE_URL_REAL:-https://resultados.tse.jus.br/oficial/ele2022}
+      REDIS_URL: ${REDIS_URL}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      ELE_1T: ${ELE_TSE:-546}
+      UFS: ${UFS_TSE:-sp}
+      CARGOS: ${CARGOS_TSE:-dep_federal}
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    networks: [megatron_net]
+
   api:
     <<: *logging
     build: ./api
@@ -100,8 +125,10 @@ services:
     environment:
       REDIS_URL: ${REDIS_URL}
       POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
+      # Uniao dos dois collectors: o consumer precisa assinar os streams de
+      # AMBAS as fontes, senao o dep_federal chega no Redis e ninguem le.
       UFS: ${UFS:-sp,rj,mg}
-      CARGOS: ${CARGOS:-governador}
+      CARGOS: ${CARGOS:-governador},${CARGOS_TSE:-dep_federal}
     depends_on:
       redis:
         condition: service_healthy
@@ -112,7 +139,7 @@ services:
       traefik.enable: "true"
       traefik.docker.network: "easypanel"
       # Mesmas rotas do bloco @api do Caddyfile.
-      traefik.http.routers.megatron-api.rule: "Host(`${MEGATRON_DOMAIN}`) && (Path(`/health`) || PathPrefix(`/resultados`) || PathPrefix(`/historico`) || PathPrefix(`/ws`))"
+      traefik.http.routers.megatron-api.rule: "Host(`${MEGATRON_DOMAIN}`) && (Path(`/health`) || PathPrefix(`/resultados`) || PathPrefix(`/historico`) || PathPrefix(`/ws`) || PathPrefix(`/candidatos`) || PathPrefix(`/selecao`))"
       traefik.http.routers.megatron-api.entrypoints: "https"
       traefik.http.routers.megatron-api.tls: "true"
       traefik.http.routers.megatron-api.tls.certresolver: "letsencrypt"
@@ -120,7 +147,7 @@ services:
       traefik.http.routers.megatron-api.service: "megatron-api"
       traefik.http.services.megatron-api.loadbalancer.server.port: "8000"
       # HTTP -> HTTPS reusando o middleware que o EasyPanel ja define no file provider.
-      traefik.http.routers.megatron-api-http.rule: "Host(`${MEGATRON_DOMAIN}`) && (Path(`/health`) || PathPrefix(`/resultados`) || PathPrefix(`/historico`) || PathPrefix(`/ws`))"
+      traefik.http.routers.megatron-api-http.rule: "Host(`${MEGATRON_DOMAIN}`) && (Path(`/health`) || PathPrefix(`/resultados`) || PathPrefix(`/historico`) || PathPrefix(`/ws`) || PathPrefix(`/candidatos`) || PathPrefix(`/selecao`))"
       traefik.http.routers.megatron-api-http.entrypoints: "http"
       traefik.http.routers.megatron-api-http.priority: "100"
       traefik.http.routers.megatron-api-http.middlewares: "redirect-to-https@file"
