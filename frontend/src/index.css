@@ -1,3 +1,27 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* Numeros de votos e percentuais em largura fixa: sem isso a tabela
+     "dança" a cada push do WebSocket. */
+  .num { font-feature-settings: "tnum" 1; font-variant-numeric: tabular-nums; }
+
+  /* Foco visivel em tudo que e operavel por teclado. */
+  :where(a, button, input, select, [tabindex]):focus-visible {
+    outline: 2px solid theme(colors.primaryLit);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  body { background-color: theme(colors.bg); color: theme(colors.muted); }
+}
+
+/* Quem pediu menos movimento no sistema nao recebe animacao. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

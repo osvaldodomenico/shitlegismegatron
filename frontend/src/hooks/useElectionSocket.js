@@ -6,7 +6,13 @@ const WS_URL = typeof import.meta !== "undefined" && import.meta.env
 
 const BACKOFF_DELAYS = [2000, 4000, 8000, 16000, 30000];
 
-export function useElectionSocket(uf, cargo) {
+/**
+ * `opcoes.selecionados` inscreve na room filtrada do servidor, que entrega o
+ * payload ja recortado nos candidatos acompanhados (~1,7 KB em vez de ~235 KB
+ * em deputado federal).
+ */
+export function useElectionSocket(uf, cargo, opcoes = {}) {
+  const { selecionados = false } = opcoes;
   const [data, setData] = useState(null);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
@@ -14,7 +20,8 @@ export function useElectionSocket(uf, cargo) {
   const timerRef = useRef(null);
 
   const connect = useCallback(() => {
-    const ws = new WebSocket(`${WS_URL}/ws/${uf}/${cargo}`);
+    const sufixo = selecionados ? "?selecionados=1" : "";
+    const ws = new WebSocket(`${WS_URL}/ws/${uf}/${cargo}${sufixo}`);
     wsRef.current = ws;
 
     ws.onopen = () => {
@@ -34,7 +41,7 @@ export function useElectionSocket(uf, cargo) {
     };
 
     ws.onerror = () => ws.close();
-  }, [uf, cargo]);
+  }, [uf, cargo, selecionados]);
 
   useEffect(() => {
     connect();
@@ -44,5 +51,5 @@ export function useElectionSocket(uf, cargo) {
     };
   }, [connect]);
 
-  return { data, connected };
+  return { data, connected, setData };
 }

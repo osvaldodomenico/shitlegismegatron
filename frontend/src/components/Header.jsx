@@ -1,9 +1,14 @@
-import { StatusBanner } from "./StatusBanner";
-
+/**
+ * Barra superior: escolha de abrangencia e cargo.
+ *
+ * A identidade e o estado "ao vivo" moram no Hero — repetir aqui competiria
+ * com ele. Esta barra e fixa porque trocar de corrida e a acao mais repetida
+ * do painel e nao deve exigir rolar de volta ao topo.
+ */
 const UFS_OPCOES = ["br", "sp", "rj", "mg", "rs", "ba", "pr", "pe", "ce", "pa", "sc"];
 const CARGOS_OPCOES = ["governador", "presidente", "senador", "dep_federal", "dep_estadual"];
 
-const CARGO_LABELS = {
+export const CARGO_LABELS = {
   governador:   "Governador",
   presidente:   "Presidente",
   senador:      "Senador",
@@ -11,33 +16,29 @@ const CARGO_LABELS = {
   dep_estadual: "Deputado Estadual",
 };
 
-export function Header({ uf, cargo, connected, onUfChange, onCargoChange }) {
+const campo =
+  "h-11 cursor-pointer rounded-lg border border-line bg-surface px-3 text-sm " +
+  "text-muted transition-colors duration-150 hover:border-primaryLit " +
+  "focus:border-primaryLit focus:outline-none";
+
+export function Header({ uf, cargo, onUfChange, onCargoChange }) {
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 mb-8 pb-4 border-b border-gray-800">
-      <h1 className="text-xl font-bold tracking-wide">
-        🗳️ <span className="text-primary">MEGATRON</span>
-      </h1>
-      <div className="flex items-center gap-3 flex-wrap">
-        <select
-          className="bg-surface border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-muted focus:outline-none focus:border-primary"
-          value={uf}
-          onChange={(e) => onUfChange(e.target.value)}
-        >
+    <header className="sticky top-0 z-30 border-b border-line bg-bg/85 backdrop-blur-md">
+      <nav className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5">
+        <label className="sr-only" htmlFor="sel-uf">Abrangência</label>
+        <select id="sel-uf" className={campo} value={uf} onChange={(e) => onUfChange(e.target.value)}>
           {UFS_OPCOES.map((u) => (
             <option key={u} value={u}>{u === "br" ? "BRASIL" : u.toUpperCase()}</option>
           ))}
         </select>
-        <select
-          className="bg-surface border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-muted focus:outline-none focus:border-primary"
-          value={cargo}
-          onChange={(e) => onCargoChange(e.target.value)}
-        >
+
+        <label className="sr-only" htmlFor="sel-cargo">Cargo</label>
+        <select id="sel-cargo" className={`${campo} min-w-0 flex-1 sm:flex-none`} value={cargo} onChange={(e) => onCargoChange(e.target.value)}>
           {CARGOS_OPCOES.map((c) => (
             <option key={c} value={c}>{CARGO_LABELS[c] || c}</option>
           ))}
         </select>
-        <StatusBanner connected={connected} />
-      </div>
+      </nav>
     </header>
   );
 }

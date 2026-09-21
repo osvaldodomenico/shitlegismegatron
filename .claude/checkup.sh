@@ -181,6 +181,50 @@ EOF
     else
         fail "/resultados nao respondeu"
     fi
+
+    # ---- acompanhamento de candidatos (filtro no servidor) ----
+    secao "Acompanhamento — ate 5 candidatos"
+
+    CORRIDA="${MEGATRON_CORRIDA_GRANDE:-sp/dep_federal}"
+
+    if curl -s --max-time 30 "https://$DOMINIO/candidatos/$CORRIDA" -o /tmp/megatron-cands.json \
+       && [ -s /tmp/megatron-cands.json ]; then
+        if "$PY" - <<'EOF'
+import json, sys
+d = json.load(open("/tmp/megatron-cands.json"))
+c = d.get("candidatos") or []
+# lista do seletor: so os campos leves, senao voltam os ~240 KB do payload
+if not c or set(c[0]) != {"sqcand", "nm", "cc", "n"}:
+    sys.exit(1)
+sys.exit(0 if d.get("total") == len(c) else 1)
+EOF
+        then pass "/candidatos entrega lista enxuta para o seletor"
+        else fail "/candidatos com formato inesperado"
+        fi
+    else
+        fail "/candidatos nao respondeu em $CORRIDA"
+    fi
+
+    if curl -s --max-time 20 "https://$DOMINIO/selecao/$CORRIDA" -o /tmp/megatron-sel.json \
+       && "$PY" -c "import json,sys; d=json.load(open('/tmp/megatron-sel.json')); sys.exit(0 if isinstance(d.get('sqcands'),list) and d.get('maximo')==5 else 1)"; then
+        pass "/selecao expoe a escolha e o limite de 5"
+    else
+        fail "/selecao nao respondeu como esperado"
+    fi
+
+    # O ganho do filtro e a razao de ele existir: se o recorte parar de
+    # funcionar, o payload volta a ~240 KB e a tela trava no dia da apuracao.
+    cheio="$(curl -s --max-time 40 -o /dev/null -w '%{size_download}' "https://$DOMINIO/resultados/$CORRIDA")"
+    filtrado="$(curl -s --max-time 40 -o /dev/null -w '%{size_download}' "https://$DOMINIO/resultados/$CORRIDA?selecionados=true")"
+    if [ "${cheio:-0}" -gt 0 ] && [ "${filtrado:-0}" -gt 0 ]; then
+        if [ "$filtrado" -lt "$((cheio / 10))" ]; then
+            pass "filtro no servidor reduz o payload ($((cheio / 1024)) KB -> $((filtrado / 1024)) KB)"
+        else
+            fail "filtro no servidor nao reduziu o payload ($cheio -> $filtrado bytes)"
+        fi
+    else
+        fail "nao foi possivel medir o ganho do filtro"
+    fi
 fi
 
 # -------------------------------------------------------------- resultado
