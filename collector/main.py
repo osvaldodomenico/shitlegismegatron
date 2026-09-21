@@ -35,14 +35,24 @@ TAREFAS = gerar_tarefas(
 )
 
 
-async def ciclo_coleta(redis: aioredis.Redis) -> None:
-    """Coleta dados de todas as URLs e publica mudanças no Redis."""
-    async with httpx.AsyncClient() as client:
-        for tarefa in TAREFAS:
-            url = tarefa["url"].replace("{base}", TSE_BASE_URL)
-            data = await fetch_if_changed(client, url)
-            if data:
-                await publish(redis, tarefa["stream"], data)
+async def ciclo_coleta(redis: aioredis.Redis, client: httpx.AsyncClient) -> None:
+    """
+    Coleta dados de todas as URLs e publica mudancas no Redis.
+
+    O cliente HTTP e criado UMA vez e reaproveitado entre ciclos. Antes era
+    um `AsyncClient` novo por ciclo, o que descartava o cookie de sessao do
+    WAF do TSE (F5 BIG-IP, `Set-Cookie: TS...`) e refazia o handshake TLS a
+    cada rodada: na noite da apuracao, cada poll chegaria como um cliente
+    novo e desconhecido, justo quando a protecao esta mais sensivel.
+
+    As URLs sao buscadas em sequencia de proposito — disparar todas de uma
+    vez viraria uma rajada contra a mesma origem a cada intervalo.
+    """
+    for tarefa in TAREFAS:
+        url = tarefa["url"].replace("{base}", TSE_BASE_URL)
+        data = await fetch_if_changed(client, url)
+        if data:
+            await publish(redis, tarefa["stream"], data)
 
 
 async def conectar_redis(max_tentativas: int = 10) -> aioredis.Redis:
@@ -65,12 +75,19 @@ async def conectar_redis(max_tentativas: int = 10) -> aioredis.Redis:
 
 async def main() -> None:
     redis = await conectar_redis()
+    # limits: conexoes mantidas vivas entre ciclos (keep-alive), para nao
+    # reabrir TLS contra o TSE a cada intervalo.
+    client = httpx.AsyncClient(
+        timeout=httpx.Timeout(10.0, connect=10.0),
+        limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=300.0),
+        follow_redirects=True,
+    )
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
         ciclo_coleta,
         "interval",
         seconds=INTERVALO,
-        args=[redis],
+        args=[redis, client],
         max_instances=1,
     )
     scheduler.start()
