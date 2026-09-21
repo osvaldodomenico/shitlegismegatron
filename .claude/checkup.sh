@@ -126,7 +126,7 @@ else
 
     html="$(curl -s --max-time 20 "https://$DOMINIO/")"
     if printf '%s' "$html" | grep -q 'id="root"'; then
-        pass "frontend servido pelo Caddy"
+        pass "frontend servido pelo proxy reverso"
     else
         fail "frontend nao respondeu HTML esperado"
     fi

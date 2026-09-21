@@ -1,0 +1,186 @@
+# docker-compose.bi.yml
+# MEGATRON na VPS BI (74.208.68.145) — Docker Swarm + EasyPanel + Traefik.
+#
+# Diferencas vs docker-compose.yml (todas obrigatorias para conviver com o BI):
+#  - SEM caddy: as portas 80/443 sao do easypanel-traefik. Quem termina TLS e
+#    roteia e o Traefik, via labels (provider docker ja habilitado la, com
+#    exposedByDefault=false). As labels ficam NOS NOSSOS containers, entao
+#    sobrevivem a qualquer regeneracao do /etc/easypanel/traefik/config/main.yaml.
+#  - SEM publicar porta em 0.0.0.0: timescaledb/redis nao vao para a internet.
+#    Só 127.0.0.1:8000 (smoke) e 127.0.0.1:5432 (backup) ficam expostos no host.
+#  - Porta 3000 NAO e publicada: e da UI do EasyPanel.
+#  - mem_limit em todos os servicos: a VPS BI nao tem swap e o MySQL do BI ja
+#    usa ~8GB. O teto de ~2.5GB impede que um vazamento nosso acione o OOM
+#    killer contra o MySQL do cliente.
+#
+# Nomes de servico mantidos identicos ao docker-compose.yml (redis, timescaledb,
+# simulator, api, frontend) para que o MESMO .env continue valendo: REDIS_URL e
+# TSE_BASE_URL resolvem por DNS interno do compose.
+
+version: "3.9"
+
+x-logging: &logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  redis:
+    <<: *logging
+    # Digest fixado: mesma imagem que roda em producao na .101 (paridade de migracao).
+    image: redis@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+    restart: unless-stopped
+    mem_limit: 256m
+    volumes: ["redis_data:/data"]
+    networks: [megatron_net]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  timescaledb:
+    <<: *logging
+    # Digest fixado (= timescale/timescaledb:latest-pg15 da .101, TimescaleDB 2.28.2 / PG 15.18).
+    # `latest-pg15` e tag movel: uma versao mais nova poderia nao aceitar o catalogo
+    # _timescaledb_catalog do dump. Nao troque sem refazer o restore-test.
+    image: timescale/timescaledb@sha256:b7aba9c1fcff0bf219b8aefdb4e8bfc1a673c37de761425d3fbf08d24860a854
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["pg_data:/var/lib/postgresql/data"]
+    networks: [megatron_net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  simulator:
+    <<: *logging
+    build: ./simulator
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      DURACAO_SIMULACAO: ${DURACAO_SIMULACAO:-3600}
+    networks: [megatron_net]
+
+  collector:
+    <<: *logging
+    build: ./collector
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      TSE_BASE_URL: ${TSE_BASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
+      ELE_1T: ${ELE_1T}
+      ELE_1T_BR: ${ELE_1T_BR:-}
+      UFS: ${UFS:-sp,rj,mg}
+      CARGOS: ${CARGOS:-governador}
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    networks: [megatron_net]
+
+  api:
+    <<: *logging
+    build: ./api
+    restart: unless-stopped
+    mem_limit: 512m
+    ports: ["127.0.0.1:8000:8000"]
+    environment:
+      REDIS_URL: ${REDIS_URL}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
+      UFS: ${UFS:-sp,rj,mg}
+      CARGOS: ${CARGOS:-governador}
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    networks: [megatron_net, easypanel]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "easypanel"
+      # Mesmas rotas do bloco @api do Caddyfile.
+      traefik.http.routers.megatron-api.rule: "Host(`${MEGATRON_DOMAIN}`) && (Path(`/health`) || PathPrefix(`/resultados`) || PathPrefix(`/historico`) || PathPrefix(`/ws`))"
+      traefik.http.routers.megatron-api.entrypoints: "https"
+      traefik.http.routers.megatron-api.tls: "true"
+      traefik.http.routers.megatron-api.tls.certresolver: "letsencrypt"
+      traefik.http.routers.megatron-api.priority: "100"
+      traefik.http.routers.megatron-api.service: "megatron-api"
+      traefik.http.services.megatron-api.loadbalancer.server.port: "8000"
+      # HTTP -> HTTPS reusando o middleware que o EasyPanel ja define no file provider.
+      traefik.http.routers.megatron-api-http.rule: "Host(`${MEGATRON_DOMAIN}`) && (Path(`/health`) || PathPrefix(`/resultados`) || PathPrefix(`/historico`) || PathPrefix(`/ws`))"
+      traefik.http.routers.megatron-api-http.entrypoints: "http"
+      traefik.http.routers.megatron-api-http.priority: "100"
+      traefik.http.routers.megatron-api-http.middlewares: "redirect-to-https@file"
+      traefik.http.routers.megatron-api-http.service: "megatron-api"
+
+  frontend:
+    <<: *logging
+    # VITE_* sao resolvidas em BUILD time — precisam ser build args (ver 803e4de).
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-https://${MEGATRON_DOMAIN}}
+        VITE_WS_URL: ${VITE_WS_URL:-wss://${MEGATRON_DOMAIN}}
+    restart: unless-stopped
+    mem_limit: 256m
+    depends_on:
+      - api
+    networks: [megatron_net, easypanel]
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "easypanel"
+      # Catch-all do dominio: prioridade menor que a da api.
+      traefik.http.routers.megatron-web.rule: "Host(`${MEGATRON_DOMAIN}`)"
+      traefik.http.routers.megatron-web.entrypoints: "https"
+      traefik.http.routers.megatron-web.tls: "true"
+      traefik.http.routers.megatron-web.tls.certresolver: "letsencrypt"
+      traefik.http.routers.megatron-web.priority: "10"
+      traefik.http.routers.megatron-web.service: "megatron-web"
+      traefik.http.services.megatron-web.loadbalancer.server.port: "3000"
+      traefik.http.routers.megatron-web-http.rule: "Host(`${MEGATRON_DOMAIN}`)"
+      traefik.http.routers.megatron-web-http.entrypoints: "http"
+      traefik.http.routers.megatron-web-http.priority: "10"
+      traefik.http.routers.megatron-web-http.middlewares: "redirect-to-https@file"
+      traefik.http.routers.megatron-web-http.service: "megatron-web"
+      # --- Dominio antigo (megatron.shiftworks.app.br): 301 para o novo. ---
+      # Feito aqui, e nao por Redirect Rule da Cloudflare, porque o token CF do
+      # projeto so tem Zone:DNS:Edit. Vantagem: o redirect nao depende da .101
+      # continuar viva. O `$$` escapa a interpolacao do compose no grupo \1.
+      traefik.http.middlewares.megatron-oldhost.redirectregex.regex: "^https?://megatron\\.shiftworks\\.app\\.br/(.*)"
+      traefik.http.middlewares.megatron-oldhost.redirectregex.replacement: "https://megatron.shiftlegis.com.br/$${1}"
+      traefik.http.middlewares.megatron-oldhost.redirectregex.permanent: "true"
+      traefik.http.routers.megatron-old.rule: "Host(`megatron.shiftworks.app.br`)"
+      traefik.http.routers.megatron-old.entrypoints: "https"
+      traefik.http.routers.megatron-old.tls: "true"
+      traefik.http.routers.megatron-old.tls.certresolver: "letsencrypt"
+      traefik.http.routers.megatron-old.middlewares: "megatron-oldhost"
+      traefik.http.routers.megatron-old.service: "megatron-web"
+      traefik.http.routers.megatron-old-http.rule: "Host(`megatron.shiftworks.app.br`)"
+      traefik.http.routers.megatron-old-http.entrypoints: "http"
+      traefik.http.routers.megatron-old-http.middlewares: "megatron-oldhost"
+      traefik.http.routers.megatron-old-http.service: "megatron-web"
+
+volumes:
+  redis_data:
+  pg_data:
+
+networks:
+  megatron_net:
+    driver: bridge
+  # Rede overlay do EasyPanel (attachable=true). E a UNICA rede em que o
+  # container do easypanel-traefik esta — sem isso ele nao alcanca api/frontend.
+  easypanel:
+    external: true
