@@ -62,9 +62,13 @@ services:
       timeout: 5s
       retries: 10
 
+  # Ferramenta de ENSAIO, nao fonte de producao: gera 5 candidatos fixos e
+  # ignora o cargo pedido. Fica atras do profile "dev" para nunca subir por
+  # acidente no dia da apuracao.
   simulator:
     <<: *logging
     build: ./simulator
+    profiles: ["dev"]
     restart: unless-stopped
     mem_limit: 256m
     environment:
@@ -77,6 +81,7 @@ services:
     restart: unless-stopped
     mem_limit: 256m
     environment:
+      PYTHONUNBUFFERED: "1"
       TSE_BASE_URL: ${TSE_BASE_URL}
       REDIS_URL: ${REDIS_URL}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
@@ -90,31 +95,15 @@ services:
       timescaledb:
         condition: service_healthy
     networks: [megatron_net]
-
-  # Fonte SEPARADA para deputado federal: a CDN REAL do TSE (apuracao de 2022,
-  # que continua publicada e estatica). O simulador gera so 5 candidatos fixos
-  # e ignora o cargo pedido, o que nao exercita um seletor de 5 entre 1429.
-  # Dois collectors convivem sem colisao porque produzem streams distintos:
-  # este publica apenas megatron:sp:dep_federal.
-  # No dia da eleicao, apontar TSE_BASE_URL/ELE_TSE para o ciclo corrente.
-  collector-tse:
-    <<: *logging
-    build: ./collector
-    restart: unless-stopped
-    mem_limit: 256m
-    environment:
-      TSE_BASE_URL: ${TSE_BASE_URL_REAL:-https://resultados.tse.jus.br/oficial/ele2022}
-      REDIS_URL: ${REDIS_URL}
-      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
-      ELE_1T: ${ELE_TSE:-546}
-      UFS: ${UFS_TSE:-sp}
-      CARGOS: ${CARGOS_TSE:-dep_federal}
-    depends_on:
-      redis:
-        condition: service_healthy
-      timescaledb:
-        condition: service_healthy
-    networks: [megatron_net]
+    # `restart: unless-stopped` so cobre processo que MORRE. Um collector que
+    # trava vivo — socket pendurado, loop preso — seguiria de pe sem coletar.
+    # O healthcheck le o heartbeat e deixa o Docker reiniciar nesse caso.
+    healthcheck:
+      test: ["CMD", "python", "/app/healthcheck.py"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 90s
 
   api:
     <<: *logging
@@ -123,12 +112,13 @@ services:
     mem_limit: 512m
     ports: ["127.0.0.1:8000:8000"]
     environment:
+      PYTHONUNBUFFERED: "1"
       REDIS_URL: ${REDIS_URL}
       POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
       # Uniao dos dois collectors: o consumer precisa assinar os streams de
       # AMBAS as fontes, senao o dep_federal chega no Redis e ninguem le.
       UFS: ${UFS:-sp,rj,mg}
-      CARGOS: ${CARGOS:-governador},${CARGOS_TSE:-dep_federal}
+      CARGOS: ${CARGOS:-governador}
     depends_on:
       redis:
         condition: service_healthy

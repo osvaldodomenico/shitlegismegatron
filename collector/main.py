@@ -4,8 +4,10 @@ APScheduler executa ciclo_coleta a cada INTERVALO segundos.
 Após 10 tentativas falhas de conexão Redis, exit(1) para restart pelo Docker.
 """
 import asyncio
+import json
 import os
 import sys
+import time
 
 import httpx
 import redis.asyncio as aioredis
@@ -24,6 +26,9 @@ REDIS_URL = os.environ["REDIS_URL"]
 ELE_1T = os.environ.get("ELE_1T", "001")
 ELE_1T_BR = os.environ.get("ELE_1T_BR") or ELE_1T
 INTERVALO = int(os.environ.get("POLL_INTERVAL_SECONDS", "60"))
+
+# Chave observada pelo healthcheck do Docker e pelo vigia de producao.
+HEARTBEAT = "megatron:heartbeat:collector"
 
 _ufs_raw = os.environ.get("UFS", "sp,rj,mg")
 _cargos_raw = os.environ.get("CARGOS", "governador")
@@ -48,11 +53,46 @@ async def ciclo_coleta(redis: aioredis.Redis, client: httpx.AsyncClient) -> None
     As URLs sao buscadas em sequencia de proposito — disparar todas de uma
     vez viraria uma rajada contra a mesma origem a cada intervalo.
     """
+    publicados = 0
+    falhas = 0
     for tarefa in TAREFAS:
         url = tarefa["url"].replace("{base}", TSE_BASE_URL)
         data = await fetch_if_changed(client, url)
         if data:
             await publish(redis, tarefa["stream"], data)
+            publicados += 1
+        elif not await _url_ok(client, url):
+            falhas += 1
+
+    # Batimento cardiaco. "Dado parado" NAO distingue collector vivo de morto:
+    # o fetcher so publica quando o payload muda, entao sobre fonte estatica o
+    # silencio e legitimo. Este heartbeat e escrito a cada ciclo, com ou sem
+    # publicacao, e e o que o healthcheck e o vigia observam.
+    await redis.set(
+        HEARTBEAT,
+        json.dumps({
+            "ts": int(time.time()),
+            "intervalo": INTERVALO,
+            "tarefas": len(TAREFAS),
+            "publicados": publicados,
+            "falhas": falhas,
+        }),
+    )
+    print(f"[collector] ciclo ok | tarefas={len(TAREFAS)} "
+          f"publicados={publicados} falhas={falhas}")
+
+
+async def _url_ok(client: httpx.AsyncClient, url: str) -> bool:
+    """
+    Distingue "nada mudou" de "a URL quebrou". `fetch_if_changed` devolve None
+    nos dois casos; sem essa checagem, um 404 em todas as corridas — codigo de
+    eleicao errado no dia — passaria como silencio normal.
+    """
+    try:
+        r = await client.head(url, timeout=8)
+        return r.status_code == 200
+    except Exception:
+        return False
 
 
 async def conectar_redis(max_tentativas: int = 10) -> aioredis.Redis:
