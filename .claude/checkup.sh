@@ -143,8 +143,27 @@ else
         fail "HTML de producao nao referencia bundle JS"
     fi
 
-    # dado vivo: o snapshot precisa ser recente, nao fossil
-    if curl -s --max-time 20 "https://$DOMINIO/resultados/sp/governador" -o /tmp/megatron-prod.json \
+    # A corrida testada sai de /corridas, e nao cravada: assim o checkup
+    # acompanha mudanca de escopo sozinho, em vez de falhar por estar olhando
+    # para uma corrida que saiu do .env.
+    curl -s --max-time 20 "https://$DOMINIO/corridas" -o /tmp/megatron-corridas.json
+    PRIMEIRA="$("$PY" - <<'EOF'
+import json
+try:
+    d = json.load(open("/tmp/megatron-corridas.json"))
+except Exception:
+    raise SystemExit
+com_dado = [c for c in (d.get("corridas") or []) if c.get("com_dado")]
+if com_dado:
+    print(f"{com_dado[0]['uf']}/{com_dado[0]['cargo']}")
+EOF
+)"
+    if [ -z "$PRIMEIRA" ]; then
+        fail "/corridas nao listou nenhuma corrida com dado"
+        PRIMEIRA="sp/dep_federal"
+    fi
+
+    if curl -s --max-time 30 "https://$DOMINIO/resultados/$PRIMEIRA" -o /tmp/megatron-prod.json \
        && [ -s /tmp/megatron-prod.json ]; then
         if "$PY" - <<'EOF'
 import json, sys
@@ -153,7 +172,7 @@ if "detail" in d:
     sys.exit(2)
 sys.exit(0 if ("cand" in d and "pst" in d) else 1)
 EOF
-        then pass "/resultados entrega payload no formato TSE"
+        then pass "/resultados entrega payload no formato TSE ($PRIMEIRA)"
         else
             rc=$?
             [ "$rc" = "2" ] && fail "/resultados sem dados (collector nao publicou)" \
