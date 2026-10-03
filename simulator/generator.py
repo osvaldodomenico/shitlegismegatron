@@ -1,10 +1,10 @@
 """
 Gera resultados eleitorais sinteticos com progressao 0% -> 100%.
 
-O payload replica o formato REAL do TSE (dados-simplificados, sufixo -r),
+O payload replica o formato PLANO do TSE (apos achatamento de dados/...-u.json),
 conferido contra a CDN em producao:
 
-    https://resultados.tse.jus.br/oficial/ele2022/544/dados-simplificados/br/br-c0001-e000544-r.json
+    https://resultados.tse.jus.br/oficial/ele2026/6257/dados/br/br-c0001-e006257-u.json (achatatado)
 
 Pontos do formato real que o simulador respeita (e que a versao anterior
 inventava, quebrando o pipeline inteiro):
@@ -49,7 +49,7 @@ def _br(valor: float, casas: int = 2) -> str:
 def gerar_resultado(uf: str = "sp", cargo: str = "0003") -> dict:
     """
     Retorna um payload no mesmo formato que o TSE publica em
-    dados-simplificados/<abr>/<abr>-c<cargo>-e<ele>-r.json.
+    dados/<abr>/<abr>-c<cargo>-e<ele>-u.json (achatatado).
     """
     prog = _progresso()
     pst = prog * 100

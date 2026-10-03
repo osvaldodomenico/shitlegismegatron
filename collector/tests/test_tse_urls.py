@@ -7,22 +7,22 @@ BASE = "https://resultados.tse.jus.br/oficial/ele2026"
 
 
 def test_url_resultado_formato():
-    """Esquema real da CDN: dados-simplificados/<abr>/<abr>-c<CCCC>-e<ELEICA>-r.json"""
+    """Esquema real da CDN: dados/<abr>/<abr>-c<CCCC>-e<ELEICA>-u.json (03/10/2026)"""
     url = url_resultado(base=BASE, ele="546", uf="sp", cargo="0006")
-    assert url == f"{BASE}/546/dados-simplificados/sp/sp-c0006-e000546-r.json"
+    assert url == f"{BASE}/546/dados/sp/sp-c0006-e000546-u.json"
 
 
 def test_url_resultado_presidente_br():
     """Presidente eh publicado na abrangencia nacional 'br'."""
     url = url_resultado(base=BASE, ele="544", uf="br", cargo="0001")
-    assert url == f"{BASE}/544/dados-simplificados/br/br-c0001-e000544-r.json"
+    assert url == f"{BASE}/544/dados/br/br-c0001-e000544-u.json"
 
 
 def test_url_resultado_ele_com_zero_padding():
     """ELEICA com 1 digito deve virar 6 no nome do arquivo (nao no path)."""
     url = url_resultado(base=BASE, ele="1", uf="rj", cargo="0003")
-    assert "/1/dados-simplificados/rj/" in url
-    assert "-e000001-r.json" in url
+    assert "/1/dados/rj/" in url
+    assert "-e000001-u.json" in url
 
 
 def test_gerar_tarefas_descarta_pares_inexistentes():
@@ -41,14 +41,14 @@ def test_gerar_tarefas_usa_codigo_nacional_para_presidente():
         ele="546", ufs=["sp", "br"], cargos=["governador", "presidente"], ele_nacional="544"
     )
     por_cargo = {t["cargo"]: t["url"] for t in tarefas}
-    assert "/546/dados-simplificados/sp/sp-c0003-e000546-r.json" in por_cargo["governador"]
-    assert "/544/dados-simplificados/br/br-c0001-e000544-r.json" in por_cargo["presidente"]
+    assert "/546/dados/sp/sp-c0003-e000546-u.json" in por_cargo["governador"]
+    assert "/544/dados/br/br-c0001-e000544-u.json" in por_cargo["presidente"]
 
 
 def test_gerar_tarefas_ele_nacional_default():
     """Sem ele_nacional, presidente cai no mesmo codigo."""
     tarefas = gerar_tarefas(ele="544", ufs=["br"], cargos=["presidente"])
-    assert "-e000544-r.json" in tarefas[0]["url"]
+    assert "-e000544-u.json" in tarefas[0]["url"]
 
 
 def test_gerar_tarefas_produto_cartesiano_por_uf():
@@ -64,7 +64,7 @@ def test_gerar_tarefas_deputado_federal():
     assert len(tarefas) == 11
     for t in tarefas:
         assert "c0006" in t["url"]  # dep_federal sempre codigo 0006
-        assert t["url"].endswith("-r.json")
+        assert t["url"].endswith("-u.json")
         assert t["stream"].startswith("megatron:")
         assert t["stream"].endswith(":dep_federal")
 
@@ -82,19 +82,19 @@ def test_caminho_e_sufixo_vem_de_env(monkeypatch):
     import importlib
     import tse_urls
 
-    monkeypatch.setenv("TSE_PATH_DADOS", "dados")
-    monkeypatch.setenv("TSE_SUFIXO", "u")
+    monkeypatch.setenv("TSE_PATH_DADOS", "dados-simplificados")
+    monkeypatch.setenv("TSE_SUFIXO", "r")
     importlib.reload(tse_urls)
     try:
         u = tse_urls.url_resultado("BASE", "546", "sp", "0006")
-        assert u == "BASE/546/dados/sp/sp-c0006-e000546-u.json"
+        assert u == "BASE/546/dados-simplificados/sp/sp-c0006-e000546-r.json"
     finally:
         monkeypatch.delenv("TSE_PATH_DADOS")
         monkeypatch.delenv("TSE_SUFIXO")
         importlib.reload(tse_urls)
 
 
-def test_padrao_continua_dados_simplificados():
+def test_padrao_continua_dados():
     import tse_urls
     u = tse_urls.url_resultado("BASE", "546", "sp", "0006")
-    assert u == "BASE/546/dados-simplificados/sp/sp-c0006-e000546-r.json"
+    assert u == "BASE/546/dados/sp/sp-c0006-e000546-u.json"

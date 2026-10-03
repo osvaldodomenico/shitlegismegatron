@@ -1,13 +1,14 @@
 """
 Templates de URL para o feed oficial do TSE.
 
-Esquema confirmado contra a CDN em producao (probe em 19/09/2026):
+Esquema confirmado contra a CDN em producao (probe em 03/10/2026):
 
-    https://resultados.tse.jus.br/oficial/<ciclo>/<ELE>/dados-simplificados/
-        <abr>/<abr>-c<CCCC>-e<ELEICA>-r.json
+    https://resultados.tse.jus.br/oficial/<ciclo>/<ELE>/dados/
+        <abr>/<abr>-c<CCCC>-e<ELEICA>-u.json
 
-    200  .../ele2022/544/dados-simplificados/br/br-c0001-e000544-r.json
-    200  .../ele2022/546/dados-simplificados/sp/sp-c0003-e000546-r.json
+    200  .../ele2026/6257/dados/br/br-c0001-e006257-u.json
+    200  .../ele2026/6259/dados/sp/sp-c0006-e006259-u.json
+    404  .../ele2026/6257/dados-simplificados/br/br-c0001-e006257-r.json  (removido)
 
 CORRECAO (21/09/2026): a versao anterior deste arquivo afirmava que o esquema
 "dados/<abr>/<abr>-c<CCCC>-e<ELEICA>-u.json" nao existia na CDN. **Existe.**
@@ -16,23 +17,25 @@ Probe direto:
     200  .../ele2024/619/dados/sp/sp71072-c0011-e000619-u.json   (municipal)
 
 A diferenca real e de cobertura e de formato:
-  - `dados-simplificados/...-r.json` so existe na ELEICAO GERAL. Payload
-    achatado (pst, cand, hg no topo) — e o que este collector le, e o que
-    UOL/G1 consomem para montar suas paginas.
+  - `dados-simplificados/...-r.json` existiu na ELEICAO GERAL ate 2022. Payload
+    achatado (pst, cand, hg no topo) — era o que este collector lia, e o que
+    UOL/G1 consumiam. Em 2026 o TSE REMOVEU esse caminho da CDN (404).
   - `dados/...-u.json` existe nos dois tipos de pleito, com payload ANINHADO
-    (`abr[0]` carrega os totais; dentro, `carg[].agr[].par[].cand[]`) e mais
-    rico: traz federacoes, vagas por agremiacao e votos de legenda por
-    partido. Nosso parser NAO le esse formato hoje.
+    (`s`, `e`, `v` nos totais; `carg[].agr[].par[].cand[]` nos candidatos) e
+    mais rico: traz federacoes, vagas por agremiacao e votos de legenda por
+    partido. Nosso fetcher ACHATA esse formato em `tse_nested.achatar` para o
+    contrato plano (pst, cand, hg no topo) que a API e a interface consomem.
 
-Por isso o caminho e o sufixo sao configuraveis por env (TSE_PATH_DADOS e
-TSE_SUFIXO): se em 04/10 o TSE publicar so o esquema completo, da para
-apontar para ele sem rebuild enquanto o parser e ajustado.
+Por isso o caminho e o sufixo continuam configuraveis por env
+(TSE_PATH_DADOS e TSE_SUFIXO): se o TSE reativar o esquema antigo no dia,
+da para voltar sem rebuild.
 
 ABRANGENCIA — o TSE usa UM CODIGO DE ELEICAO POR ABRANGENCIA, nao por turno:
 
-    ele=544  ->  nacional: presidente, publicado sob a abrangencia "br"
-    ele=546  ->  por UF:   governador, senador, dep. federal, dep. estadual
-    ele=547  ->  2o turno de governador (por UF)
+    ele=6257 ->  nacional: presidente, publicado sob a abrangencia "br"
+    ele=6259 ->  por UF:   governador, senador, dep. federal, dep. estadual
+    ele=6260 ->  2o turno de governador (por UF)
+    (544/546/547 eram os codigos de 2022, hoje sem arquivo na CDN)
 
 Por isso `gerar_tarefas` recebe dois codigos e so cruza os pares que
 existem de fato na CDN (presidente x br; demais cargos x UF).
@@ -44,8 +47,8 @@ import os
 from itertools import product
 
 # Configuraveis para nao precisar de rebuild se o TSE mudar o caminho no dia.
-PATH_DADOS = os.environ.get("TSE_PATH_DADOS", "dados-simplificados")
-SUFIXO = os.environ.get("TSE_SUFIXO", "r")
+PATH_DADOS = os.environ.get("TSE_PATH_DADOS", "dados")
+SUFIXO = os.environ.get("TSE_SUFIXO", "u")
 
 # Mapeamento cargo → codigo TSE (4 digitos)
 CARGO_CODIGOS = {
@@ -68,11 +71,11 @@ def url_resultado(base: str, ele: str, uf: str, cargo: str) -> str:
     Esquema oficial TSE (caminho e sufixo vem de env — ver topo do modulo):
         {base}/{ele}/{PATH_DADOS}/{uf}/{uf}-c{cargo}-e{ele_padded}-{SUFIXO}.json
 
-    Exemplo (presidente 1T 2022, nacional):
-        https://resultados.tse.jus.br/oficial/ele2022/544/dados-simplificados/br/br-c0001-e000544-r.json
+    Exemplo (presidente 1T 2026, nacional):
+        https://resultados.tse.jus.br/oficial/ele2026/6257/dados/br/br-c0001-e006257-u.json
 
-    Exemplo (governador 1T 2022, SP):
-        https://resultados.tse.jus.br/oficial/ele2022/546/dados-simplificados/sp/sp-c0003-e000546-r.json
+    Exemplo (dep. federal 1T 2026, SP):
+        https://resultados.tse.jus.br/oficial/ele2026/6259/dados/sp/sp-c0006-e006259-u.json
     """
     ele_padded = str(ele).zfill(6)
     return (

@@ -15,10 +15,11 @@ def health():
     return {"status": "ok", "mode": "MEGATRON_SIM"}
 
 
+@app.get("/oficial/ele2026/{ele}/dados/{uf}/{filename}")
 @app.get("/oficial/ele2026/{ele}/dados-simplificados/{uf}/{filename}")
 def resultado_variavel(ele: str, uf: str, filename: str):
     """
-    Imita o endpoint dados-simplificados do TSE (o que UOL/G1 consomem).
+    Imita os endpoints do TSE (dados/...-u.json e o legado dados-simplificados/...-r.json).
     Extrai o cargo do filename: {uf}-c{cargo}-e{ele}-r.json
     Ex: sp-c0003-e000001-r.json -> cargo = "0003"
     """

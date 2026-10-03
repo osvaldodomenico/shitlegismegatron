@@ -84,8 +84,8 @@ services:
       PYTHONUNBUFFERED: "1"
       TSE_BASE_URL: ${TSE_BASE_URL}
       # Trocaveis sem rebuild caso o TSE mude o caminho em 04/10.
-      TSE_PATH_DADOS: ${TSE_PATH_DADOS:-dados-simplificados}
-      TSE_SUFIXO: ${TSE_SUFIXO:-r}
+      TSE_PATH_DADOS: ${TSE_PATH_DADOS:-dados}
+      TSE_SUFIXO: ${TSE_SUFIXO:-u}
       REDIS_URL: ${REDIS_URL}
       POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-60}
       ELE_1T: ${ELE_1T}

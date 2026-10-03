@@ -14,7 +14,10 @@ set -uo pipefail
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$RAIZ"
 
-DOMINIO="${MEGATRON_DOMAIN:-megatron.shiftworks.app.br}"
+# Producao rodou a migracao de dominio para megatron.shiftlegis.com.br em 03/10/2026:
+# o {DOM_ANTIGO} responde 301 de redirecionamento. Sem esta troca o checkup
+# acusaria falha de API e bundle em uma producao saudavel.
+DOMINIO="${MEGATRON_DOMAIN:-megatron.shiftlegis.com.br}"
 VENV="${MEGATRON_CHECKUP_VENV:-/tmp/megatron-checkup-venv}"
 
 FALHAS=0
@@ -55,13 +58,13 @@ fi
 secao "Contrato com o TSE"
 
 # 2.1 o esquema de URL usado pelo collector ainda responde 200 na CDN real
-URL_REAL="https://resultados.tse.jus.br/oficial/ele2022/544/dados-simplificados/br/br-c0001-e000544-r.json"
+URL_REAL="https://resultados.tse.jus.br/oficial/ele2026/6257/dados/br/br-c0001-e006257-u.json"
 code="$(curl -s -o /tmp/megatron-tse-ref.json -w '%{http_code}' -A 'Megatron/1.0' \
     -e 'https://resultados.tse.jus.br/' --max-time 20 "$URL_REAL")"
 if [ "$code" = "200" ]; then
-    pass "esquema dados-simplificados/-r.json responde 200 na CDN do TSE"
+    pass "esquema dados/-u.json responde 200 na CDN do TSE"
 else
-    fail "esquema de URL do collector nao responde na CDN (HTTP $code)"
+    fail "esquema de URL do collector nao responde na CDN (HTTP $code) — ver tse_nested e TSE_PATH_DADOS"
 fi
 
 # 2.2 o payload real satisfaz a validacao do fetcher
@@ -70,23 +73,35 @@ if [ -s /tmp/megatron-tse-ref.json ]; then
 import json, sys
 sys.path.insert(0, "collector")
 from fetcher import REQUIRED_KEYS
-d = json.load(open("/tmp/megatron-tse-ref.json"))
+from tse_nested import achatar
+d = achatar(json.load(open("/tmp/megatron-tse-ref.json")))
 sys.exit(0 if REQUIRED_KEYS.issubset(d.keys()) else 1)
 EOF
     then pass "payload real do TSE passa na validacao do fetcher"
     else fail "fetcher rejeitaria o payload real do TSE (REQUIRED_KEYS nao batem)"
     fi
 
-    # 2.3 o simulador emite o MESMO formato que o TSE real
+    # 2.3 o simulador emite o MESMO formato que o TSE real (contrato plano)
     if "$PY" - <<'EOF'
 import json, sys
 sys.path.insert(0, "simulator")
+sys.path.insert(0, "collector")
 from generator import gerar_resultado
-real = json.load(open("/tmp/megatron-tse-ref.json"))
+from tse_nested import achatar
+real = achatar(json.load(open("/tmp/megatron-tse-ref.json")))
 sim = gerar_resultado("br", "0001")
-if set(sim) - set(real):
+# contrato plano: ambos tem pst/cand/hg no topo; cand tem cc/vap/sqcand
+if not {"pst","cand","hg"}.issubset(sim.keys()):
     sys.exit(1)
-if set(sim["cand"][0]) != set(real["cand"][0]):
+if not {"pst","cand","hg"}.issubset(real.keys()):
+    sys.exit(1)
+if not sim.get("cand") or not real.get("cand"):
+    sys.exit(1)
+# chaves essenciais do candidato (sem exigir igualdade exata: real tem ccd/nmu/pvapn extras)
+essenciais = {"sqcand","n","nm","cc","vap","pvap","st","dvt"}
+if not essenciais.issubset(set(sim["cand"][0].keys())):
+    sys.exit(1)
+if not essenciais.issubset(set(real["cand"][0].keys())):
     sys.exit(1)
 if "%" in sim["pst"] or "," not in sim["pst"]:
     sys.exit(1)
@@ -121,10 +136,10 @@ if [ "${SKIP_PROD:-0}" = "1" ]; then
 else
     secao "Producao — https://$DOMINIO"
 
-    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$DOMINIO/health")"
+    code="$(curl -sL -o /dev/null -w '%{http_code}' --max-time 20 "https://$DOMINIO/health")"
     [ "$code" = "200" ] && pass "API /health responde 200" || fail "API /health retornou $code"
 
-    html="$(curl -s --max-time 20 "https://$DOMINIO/")"
+    html="$(curl -sL --max-time 20 "https://$DOMINIO/")"
     if printf '%s' "$html" | grep -q 'id="root"'; then
         pass "frontend servido pelo proxy reverso"
     else
@@ -146,7 +161,7 @@ else
     # A corrida testada sai de /corridas, e nao cravada: assim o checkup
     # acompanha mudanca de escopo sozinho, em vez de falhar por estar olhando
     # para uma corrida que saiu do .env.
-    curl -s --max-time 20 "https://$DOMINIO/corridas" -o /tmp/megatron-corridas.json
+    curl -sL --max-time 20 "https://$DOMINIO/corridas" -o /tmp/megatron-corridas.json
     PRIMEIRA="$("$PY" - <<'EOF'
 import json
 try:
@@ -163,7 +178,7 @@ EOF
         PRIMEIRA="sp/dep_federal"
     fi
 
-    if curl -s --max-time 30 "https://$DOMINIO/resultados/$PRIMEIRA" -o /tmp/megatron-prod.json \
+    if curl -sL --max-time 30 "https://$DOMINIO/resultados/$PRIMEIRA" -o /tmp/megatron-prod.json \
        && [ -s /tmp/megatron-prod.json ]; then
         if "$PY" - <<'EOF'
 import json, sys
@@ -183,7 +198,7 @@ EOF
         # publica quando o payload muda, entao "dado antigo" pode ser silencio
         # legitimo — durante um replay de eleicao passada, sempre e. O sinal
         # honesto e o heartbeat que o collector grava a cada ciclo.
-        if curl -s --max-time 20 "https://$DOMINIO/health" -o /tmp/megatron-health.json \
+        if curl -sL --max-time 20 "https://$DOMINIO/health" -o /tmp/megatron-health.json \
            && "$PY" - <<'EOF'
 import json, sys
 h = json.load(open("/tmp/megatron-health.json"))
@@ -213,7 +228,7 @@ EOF
 
     CORRIDA="${MEGATRON_CORRIDA_GRANDE:-sp/dep_federal}"
 
-    if curl -s --max-time 30 "https://$DOMINIO/candidatos/$CORRIDA" -o /tmp/megatron-cands.json \
+    if curl -sL --max-time 30 "https://$DOMINIO/candidatos/$CORRIDA" -o /tmp/megatron-cands.json \
        && [ -s /tmp/megatron-cands.json ]; then
         if "$PY" - <<'EOF'
 import json, sys
@@ -231,17 +246,44 @@ EOF
         fail "/candidatos nao respondeu em $CORRIDA"
     fi
 
-    if curl -s --max-time 20 "https://$DOMINIO/selecao/$CORRIDA" -o /tmp/megatron-sel.json \
+    if curl -sL --max-time 20 "https://$DOMINIO/selecao/$CORRIDA" -o /tmp/megatron-sel.json \
        && "$PY" -c "import json,sys; d=json.load(open('/tmp/megatron-sel.json')); sys.exit(0 if isinstance(d.get('sqcands'),list) and d.get('maximo')==5 else 1)"; then
         pass "/selecao expoe a escolha e o limite de 5"
     else
         fail "/selecao nao respondeu como esperado"
     fi
 
+    # ---- filtro no servidor: mede o ganho sobre uma escolha REAL ----
+    # A selecao salva em producao pode ser de uma eleicao anterior (os
+    # `sqcand` de 2022 nao existem no payload de 2026). Nesse caso o
+    # recorte devolve `cand: []` e a medicao de bytes passaria a toa por
+    # medir "vazio", nao "filtrado". O checkup grava 2 candidatos que
+    # EXISTEM no payload atual, mede, e restaura a selecao anterior.
+    curl -sL --max-time 40 "https://$DOMINIO/resultados/$CORRIDA" -o /tmp/megatron-full.json || true
+    ESCOLHA_TESTE="$("$PY" -c "
+import json
+d = json.load(open('/tmp/megatron-full.json'))
+print(','.join(str(c.get('sqcand')) for c in (d.get('cand') or [])[:2]))
+" 2>/dev/null || echo "")"
+    printf '%s' "$ESCOLHA_TESTE" | tr ',' ' ' > /tmp/megatron-escolha.txt
+    ESCOLHA_ORIGINAL="$("$PY" -c "
+import json
+print(','.join(json.load(open('/tmp/megatron-sel.json')).get('sqcands') or []))
+" 2>/dev/null || echo "")"
+    if [ -n "$ESCOLHA_TESTE" ]; then
+        ESCOLHA_JSON="$("$PY" -c "
+import json, sys
+print(json.dumps([x for x in sys.argv[1].split(',') if x]))
+" "$ESCOLHA_TESTE" 2>/dev/null || echo "[]")"
+        curl -sL --max-time 20 -X PUT "https://$DOMINIO/selecao/$CORRIDA" \
+            -H 'Content-Type: application/json' -d "{\"sqcands\": $ESCOLHA_JSON}" \
+            -o /dev/null || true
+    fi
+
     # O ganho do filtro e a razao de ele existir: se o recorte parar de
-    # funcionar, o payload volta a ~240 KB e a tela trava no dia da apuracao.
-    cheio="$(curl -s --max-time 40 -o /dev/null -w '%{size_download}' "https://$DOMINIO/resultados/$CORRIDA")"
-    filtrado="$(curl -s --max-time 40 -o /dev/null -w '%{size_download}' "https://$DOMINIO/resultados/$CORRIDA?selecionados=true")"
+    # funcionar, o payload volta a ~230 KB e a tela trava no dia da apuracao.
+    cheio="$(curl -sL --max-time 40 -o /dev/null -w '%{size_download}' "https://$DOMINIO/resultados/$CORRIDA")"
+    filtrado="$(curl -sL --max-time 40 -o /dev/null -w '%{size_download}' "https://$DOMINIO/resultados/$CORRIDA?selecionados=true")"
     if [ "${cheio:-0}" -gt 0 ] && [ "${filtrado:-0}" -gt 0 ]; then
         if [ "$filtrado" -lt "$((cheio / 10))" ]; then
             pass "filtro no servidor reduz o payload ($((cheio / 1024)) KB -> $((filtrado / 1024)) KB)"
@@ -252,12 +294,25 @@ EOF
         fail "nao foi possivel medir o ganho do filtro"
     fi
 
-    # Quociente e linha de corte: indicador que decide leitura de eleicao.
-    # Se o calculo quebrar, a tela passa a afirmar quem se elege com numero
-    # errado — pior do que nao mostrar nada.
-    if curl -s --max-time 40 "https://$DOMINIO/resultados/$CORRIDA?selecionados=true" -o /tmp/megatron-ind.json \
-       && [ -s /tmp/megatron-ind.json ]; then
-        if "$PY" - <<'EOF'
+    # ---- indicadores de apuracao: a lei so tem valor com votos ----
+    # Antes da urna (vv=0, pst=0,00) `apuracao.calcular` devolve {} de
+    # proposito: quociente com zero votos nao divide. Exigir indicador
+    # nesse estagio reprovaria uma producao saudavel na vespera da
+    # eleicao — exatamente o dia em que o checkup precisa passar.
+    # Antes da urna exigimos o CONTRATO (payload achatado, filtro
+    # devolvendo so os acompanhados, foto montada). Depois da urna
+    # exigimos o calculo legal conferido contra o art. 106.
+curl -sL --max-time 40 "https://$DOMINIO/resultados/$CORRIDA?selecionados=true" -o /tmp/megatron-ind.json || true
+    APURADO="$("$PY" -c "
+import json
+d = json.load(open('/tmp/megatron-ind.json'))
+vv = int(str(d.get('vv') or '0').replace('.', '').replace(',', '') or 0)
+print('sim' if vv > 0 else 'nao')
+" 2>/dev/null || echo nao)"
+
+    if [ -s /tmp/megatron-ind.json ]; then
+        if [ "$APURADO" = "sim" ]; then
+            if "$PY" - <<'EOF'
 import json, sys
 d = json.load(open("/tmp/megatron-ind.json"))
 i = d.get("indicadores") or {}
@@ -277,11 +332,53 @@ for c in d.get("cand") or []:
         sys.exit(1)
 sys.exit(0)
 EOF
-        then pass "quociente, barreira e linha de corte conferem com a lei"
-        else fail "indicadores de apuracao ausentes ou divergentes"
+            then pass "quociente, barreira e linha de corte conferem com a lei"
+            else fail "indicadores de apuracao ausentes ou divergentes"
+            fi
+        else
+            if "$PY" - <<'EOF'
+import json, sys
+d = json.load(open("/tmp/megatron-ind.json"))
+# contrato do payload achatado: chaves do TSE no topo
+for k in ("pst", "vv", "hg", "cand", "ele"):
+    if k not in d:
+        sys.exit(1)
+# antes da urna nao pode haver indicador inventado
+if d.get("indicadores"):
+    sys.exit(1)
+# filtro precisa devolver SO os acompanhados, com foto montada
+escolhidos = {str(x) for x in open("/tmp/megatron-escolha.txt").read().split() if x}
+cands = d.get("cand") or []
+if not cands:
+    sys.exit(1)
+if {str(c.get("sqcand")) for c in cands} != escolhidos:
+    sys.exit(1)
+for c in cands:
+    if not str(c.get("foto") or "").endswith(".jpeg"):
+        sys.exit(1)
+sys.exit(0)
+EOF
+            then pass "pre-urna: payload achatado, filtro so dos acompanhados, sem indicador inventado"
+            else fail "contrato do payload falhou no pre-urna"
+            fi
         fi
     else
         fail "nao foi possivel ler os indicadores de apuracao"
+    fi
+
+    # restaura a selecao que estava salva antes do teste
+    if [ -n "$ESCOLHA_ORIGINAL" ]; then
+        ORIG_JSON="$("$PY" -c "
+import json, sys
+print(json.dumps([x for x in sys.argv[1].split(',') if x]))
+" "$ESCOLHA_ORIGINAL" 2>/dev/null || echo "[]")"
+        curl -sL --max-time 20 -X PUT "https://$DOMINIO/selecao/$CORRIDA" \
+            -H 'Content-Type: application/json' -d "{\"sqcands\": $ORIG_JSON}" \
+            -o /dev/null || true
+    else
+        curl -sL --max-time 20 -X PUT "https://$DOMINIO/selecao/$CORRIDA" \
+            -H 'Content-Type: application/json' -d '{"sqcands": []}' \
+            -o /dev/null || true
     fi
 fi
 

@@ -1,5 +1,6 @@
 # MEGATRON — reverse proxy via Caddy
-# Dominio: megatron.shiftworks.app.br (Cloudflare proxy ON)
+# Dominio: megatron.shiftlegis.com.br (producao, EasyPanel/Traefik). Caddy e o proxy da
+# outra VPS (.101). O dominio antigo megatron.shiftworks.app.br responde 301 para este.
 # TLS: emitido via DNS-01 challenge (modulo cloudflare embutido).
 #
 # Upstreams por NOME DE SERVICO do compose (api, frontend), resolvidos pelo
@@ -12,14 +13,18 @@
     acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
 }
 
-{$MEGATRON_DOMAIN:megatron.shiftworks.app.br} {
+{$MEGATRON_DOMAIN:megatron.shiftlegis.com.br} {
     encode gzip zstd
 
     # 1) API: rotas REST + WebSocket
     @api {
         path /health
+        path /corridas
+        path /corridas/*
         path /resultados/*
         path /historico/*
+        path /candidatos/*
+        path /selecao/*
         path /ws/*
     }
     reverse_proxy @api api:8000 {

@@ -142,7 +142,7 @@ def calcular(payload: dict) -> dict:
 # Fotos oficiais: .../oficial/ele<ANO>/<ele>/fotos/<uf>/<sqcand>.jpeg (~6 KB).
 # Servidas pela propria CDN do TSE, entao nao passam pela nossa banda.
 TSE_FOTOS_BASE = os.environ.get(
-    "TSE_FOTOS_BASE", "https://resultados.tse.jus.br/oficial/ele2022"
+    "TSE_FOTOS_BASE", "https://resultados.tse.jus.br/oficial/ele2026"
 )
 
 

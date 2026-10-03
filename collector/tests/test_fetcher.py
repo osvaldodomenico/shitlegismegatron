@@ -16,7 +16,7 @@ def clear_snapshots():
 @pytest.mark.asyncio
 async def test_fetch_retorna_dados_na_primeira_chamada():
     url = "http://tse.example.com/resultado.json"
-    respx.get(url).mock(return_value=httpx.Response(200, json={"pst": "10,00", "cand": [], "hg": "10:00:00"}))
+    respx.get(url).mock(return_value=httpx.Response(200, json={"pst": "10,00", "cand": [{"sqcand": "A"}], "hg": "10:00:00"}))
     async with httpx.AsyncClient() as client:
         result = await fetch_if_changed(client, url)
     assert result is not None
@@ -26,7 +26,7 @@ async def test_fetch_retorna_dados_na_primeira_chamada():
 @pytest.mark.asyncio
 async def test_fetch_retorna_none_quando_dados_iguais():
     url = "http://tse.example.com/resultado.json"
-    payload = {"pst": "10,00", "cand": [], "hg": "10:00:00"}
+    payload = {"pst": "10,00", "cand": [{"sqcand": "A"}], "hg": "10:00:00"}
     respx.get(url).mock(return_value=httpx.Response(200, json=payload))
     async with httpx.AsyncClient() as client:
         await fetch_if_changed(client, url)
@@ -38,8 +38,8 @@ async def test_fetch_retorna_none_quando_dados_iguais():
 async def test_fetch_retorna_dados_quando_muda():
     url = "http://tse.example.com/resultado.json"
     respx.get(url).mock(side_effect=[
-        httpx.Response(200, json={"pst": "10,00", "cand": [], "hg": "10:00:00"}),
-        httpx.Response(200, json={"pst": "20,00", "cand": [], "hg": "10:01:00"}),
+        httpx.Response(200, json={"pst": "10,00", "cand": [{"sqcand": "A"}], "hg": "10:00:00"}),
+        httpx.Response(200, json={"pst": "20,00", "cand": [{"sqcand": "A"}], "hg": "10:01:00"}),
     ])
     async with httpx.AsyncClient() as client:
         await fetch_if_changed(client, url)
