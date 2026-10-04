@@ -111,6 +111,7 @@ def achatar(payload: dict) -> dict:
     flat["v"] = _texto(v.get("tv"))
     flat["cand"] = _candidatos(cargos)
     flat["vagas_por_agremiacao"] = _vagas_por_agremiacao(cargos)
+    flat["partidos"] = _partidos(cargos)
     return flat
 
 
@@ -137,6 +138,31 @@ def _candidatos(cargos: list[dict]) -> list[dict]:
                             "dvt": _voto_anulado(cand),
                         }
                     )
+    return saida
+
+
+def _partidos(cargos: list[dict]) -> list[dict]:
+    """
+    Totais por partido que o TSE publica em `par[]` e que a flat perdia:
+    `tvtn` (nominais), `tvtl` (legenda), `tvan` (nominais + legenda) — e,
+    da agremiacao que o contem, `vag` (vagas) e `agr` (codigo). E o numero
+    que decide quantas cadeiras a legenda leva; a interface mostra no topo
+    do ranking por partido.
+    """
+    saida: list[dict] = []
+    for cargo in cargos:
+        for agr in cargo.get("agr") or []:
+            for par in agr.get("par") or []:
+                saida.append({
+                    "n": _texto(par.get("n")),
+                    "sg": _texto(par.get("sg")),
+                    "nm": _texto(par.get("nm")),
+                    "agr": _texto(agr.get("n")),
+                    "vag": _texto(agr.get("vag")),
+                    "tvtn": _texto(par.get("tvtn")),
+                    "tvtl": _texto(par.get("tvtl")),
+                    "tvan": _texto(par.get("tvan")),
+                })
     return saida
 
 

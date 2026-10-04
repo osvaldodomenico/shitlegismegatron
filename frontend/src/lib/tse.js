@@ -141,3 +141,25 @@ export function rankingDaLegenda(cands, sigla, destaque, n = 10) {
   }
   return { lista: top, total: daLegenda.length, todos: daLegenda };
 }
+
+/**
+ * Votos do partido na corrida. Usa `partidos[]` (collector >= 04/10 19h:
+ * nominais + legenda + vagas, direto do TSE). Sem esse campo, soma os
+ * nominais dos candidatos — ai `legenda` e `vagas` ficam null e o total e
+ * so o nominal.
+ */
+export function votosDoPartido(data, sigla) {
+  const alvo = String(sigla || "").toUpperCase();
+  const validos = num(data?.vv);
+  const pct = (v) => (validos > 0 ? (v / validos) * 100 : 0);
+  const p = (data?.partidos || []).find((x) => String(x.sg || "").toUpperCase() === alvo);
+  if (p) {
+    const nominais = num(p.tvtn), legenda = num(p.tvtl);
+    const total = num(p.tvan) || nominais + legenda;
+    return { total, nominais, legenda, vagas: p.vag === undefined || p.vag === null ? null : num(p.vag), pct: pct(total), completo: true };
+  }
+  const nominais = candidatos(data)
+    .filter((c) => partido(c).toUpperCase() === alvo)
+    .reduce((t, c) => t + num(c.vap), 0);
+  return { total: nominais, nominais, legenda: null, vagas: null, pct: pct(nominais), completo: false };
+}

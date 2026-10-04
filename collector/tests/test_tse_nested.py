@@ -1,0 +1,34 @@
+import sys, os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from tse_nested import achatar
+
+
+def _payload():
+    return {
+        "ele": "6259", "tpabr": "uf", "cdabr": "sp",
+        "s": {"pst": "10,00"}, "e": {"e": "100"}, "v": {"vv": "1000", "vnom": "900", "tv": "1100"},
+        "carg": [{
+            "cd": "6", "nv": "70",
+            "agr": [
+                {"n": "A1", "nm": "REPUBLICANOS", "vag": "6", "par": [
+                    {"n": "10", "sg": "REPUBLICANOS", "nm": "REPUBLICANOS", "tvtn": "800", "tvtl": "13", "tvan": "813",
+                     "cand": [{"sqcand": "1", "n": "1055", "nm": "MILTON", "vap": "500", "st": ""}]},
+                ]},
+                {"n": "A2", "nm": "FED PT", "vag": "2", "par": [
+                    {"n": "13", "sg": "PT", "nm": "PT", "tvtn": "100", "tvtl": "5", "tvan": "105", "cand": []},
+                ]},
+            ],
+        }],
+    }
+
+
+def test_achatar_publica_totais_por_partido():
+    """Votos nominais + legenda e vagas da agremiacao — o que decide as cadeiras."""
+    flat = achatar(_payload())
+    rep = next(p for p in flat["partidos"] if p["sg"] == "REPUBLICANOS")
+    assert rep == {"n": "10", "sg": "REPUBLICANOS", "nm": "REPUBLICANOS", "agr": "A1",
+                   "vag": "6", "tvtn": "800", "tvtl": "13", "tvan": "813"}
+    assert [p["sg"] for p in flat["partidos"]] == ["REPUBLICANOS", "PT"]
+    # o resto do contrato plano continua igual
+    assert flat["pst"] == "10,00" and flat["cand"][0]["cc"] == "REPUBLICANOS"

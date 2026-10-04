@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes, votosDoPartido } from "./lib/tse";
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 import { SeletorCandidatos } from "./components/SeletorCandidatos";
@@ -156,6 +156,7 @@ function ColunaRanking({ cfg, data, connected }) {
   const alvo = lista.find((c) => c.destaque);
   // Assim que o TSE preencher `st`, o resumo da legenda substitui a contagem crua.
   const resumo = resumoSituacoes(todos);
+  const vp = votosDoPartido(data, cfg.partido);
 
   return (
     <section className="flex min-h-0 flex-col px-6 py-5" aria-label={`${cfg.titulo} · São Paulo · ${cfg.partido}`}>
@@ -177,6 +178,33 @@ function ColunaRanking({ cfg, data, connected }) {
             </span>
           )}
         </p>
+        {/* Votos do partido na corrida inteira: o numero que decide quantas vagas a legenda leva. */}
+        {vp.total > 0 && (
+          <dl className="mt-2 flex items-baseline gap-x-5 rounded-xl border border-line bg-elevated/60 px-4 py-2">
+            <div>
+              <dt className="text-[10px] uppercase tracking-wider text-faint">Votos do partido</dt>
+              <dd className="num font-mono text-2xl font-bold leading-none text-muted">
+                {fmtInt(vp.total)}
+                <span className="ml-2 text-base font-semibold text-primaryLit">{fmtPct(vp.pct)}%</span>
+                <span className="ml-1 text-xs font-normal text-subtle">dos válidos</span>
+              </dd>
+            </div>
+            <div className="ml-auto flex gap-x-4 text-right">
+              <div>
+                <dt className="text-[10px] uppercase tracking-wider text-faint">Nominais</dt>
+                <dd className="num font-mono text-sm font-semibold text-subtle">{fmtInt(vp.nominais)}</dd>
+              </div>
+              <div>
+                <dt className="text-[10px] uppercase tracking-wider text-faint">Legenda</dt>
+                <dd className="num font-mono text-sm font-semibold text-subtle">{vp.legenda === null ? "—" : fmtInt(vp.legenda)}</dd>
+              </div>
+              <div>
+                <dt className="text-[10px] uppercase tracking-wider text-faint">Vagas</dt>
+                <dd className="num font-mono text-sm font-semibold text-successLit">{vp.vagas === null ? "—" : vp.vagas}</dd>
+              </div>
+            </div>
+          </dl>
+        )}
       </header>
       {lista.length === 0 ? (
         <Vazio connected={connected} />

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal } from "../lib/tse";
+import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal, votosDoPartido } from "../lib/tse";
 
 const HOJE = "04/10/2026";
 
@@ -94,5 +94,25 @@ describe("situacao do TSE", () => {
     expect(boletimFinal({ tf: "s" })).toBe(true);
     expect(legendaBoletim({ dg: "04/10/2026", hg: "23:10:00", pst: "100,00", tf: "s" }, "04/10/2026"))
       .toBe("Totalização FINAL do TSE · boletim às 23:10:00");
+  });
+});
+
+describe("votosDoPartido", () => {
+  const cand = [
+    { cc: "REPUBLICANOS", vap: "600" }, { cc: "PT", vap: "900" }, { cc: "Republicanos", vap: "400" },
+  ];
+
+  it("com partidos[] do TSE: nominais + legenda, vagas e % dos validos", () => {
+    const d = { vv: "10000", cand, partidos: [{ sg: "REPUBLICANOS", tvtn: "1000", tvtl: "50", tvan: "1050", vag: "6" }] };
+    expect(votosDoPartido(d, "republicanos")).toEqual({ total: 1050, nominais: 1000, legenda: 50, vagas: 6, pct: 10.5, completo: true });
+  });
+
+  it("sem partidos[]: soma os nominais dos candidatos e avisa que esta incompleto", () => {
+    const r = votosDoPartido({ vv: "10000", cand }, "REPUBLICANOS");
+    expect(r).toEqual({ total: 1000, nominais: 1000, legenda: null, vagas: null, pct: 10, completo: false });
+  });
+
+  it("partido sem votos nao divide por zero", () => {
+    expect(votosDoPartido({ vv: "0", cand: [] }, "X").pct).toBe(0);
   });
 });
