@@ -25,8 +25,8 @@ const MAX_FAIXA = 3;    // linhas por faixa na coluna 1
 
 // Rankings por legenda, um por coluna, na ordem da tela.
 const RANKINGS = [
-  { cargo: "dep_estadual", titulo: "Deputado Estadual", partido: "REPUBLICANOS", destaque: null,   n: 8 },
-  { cargo: "dep_federal",  titulo: "Deputado Federal",  partido: "REPUBLICANOS", destaque: "1055", n: 8 },
+  { cargo: "dep_estadual", titulo: "Deputado Estadual", partido: "REPUBLICANOS", destaque: null,   n: 10 },
+  { cargo: "dep_federal",  titulo: "Deputado Federal",  partido: "REPUBLICANOS", destaque: "1055", n: 10 },
 ];
 
 const fmtPct = (v) => num(v).toFixed(2).replace(".", ",");
@@ -219,7 +219,7 @@ function ColunaRanking({ cfg, data, connected, aoClicar }) {
       {lista.length === 0 ? (
         <Vazio connected={connected} />
       ) : (
-        <ol className="mt-3 flex min-h-0 flex-1 flex-col gap-1.5">
+        <ol className="mt-3 flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain pr-1">
           {lista.map((c) => (
             <LinhaCompacta key={c.sqcand || c.seq} cand={c} posicao={c.posicao} destaque={c.destaque}
               apagada={derrotado(c)}
