@@ -60,3 +60,8 @@ export function buscarResultado(uf, cargo, apenasSelecionados = false, perfil) {
 export function buscarCorridas() {
   return json("/corridas");
 }
+
+/** Votacao de um candidato por cidade ou zona (coletor de municipios, 5 em 5 min). */
+export function buscarCidades(uf, cargo, sqcand, nivel = "municipio") {
+  return json(`/candidatos/${uf}/${cargo}/${sqcand}/cidades?nivel=${nivel}`);
+}

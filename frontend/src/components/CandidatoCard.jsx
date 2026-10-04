@@ -62,7 +62,7 @@ function LinhaDeCorte({ ind }) {
   );
 }
 
-export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover, proporcional = true, projecao = false, apagada = false }) {
+export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover, aoAbrir, proporcional = true, projecao = false, apagada = false }) {
   // Em majoritaria os indicadores de legenda nao se aplicam: nem chip, nem corte.
   const ind = proporcional ? cand.ind : null;
   const votos = num(cand.vap);
@@ -70,7 +70,11 @@ export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover, propo
   const reprovadoNaBarreira = ind && ind.passou_barreira === false;
 
   return (
-    <li className="rounded-xl border border-line bg-surface p-4">
+    <li
+      className={`rounded-xl border border-line bg-surface p-4 ${aoAbrir ? "cursor-pointer transition-colors duration-150 hover:border-primaryLit" : ""}`}
+      onClick={aoAbrir ? () => aoAbrir(cand) : undefined}
+      title={aoAbrir ? "Ver votação por cidade" : undefined}
+    >
       <div className="flex items-start gap-3">
         <Foto src={cand.foto} nome={cand.nm} cor={corTexto} apagada={apagada} />
 
@@ -87,7 +91,7 @@ export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover, propo
             </div>
 
             <button
-              onClick={() => aoRemover(cand.sqcand)}
+              onClick={(e) => { e.stopPropagation(); aoRemover(cand.sqcand); }}
               aria-label={`Deixar de acompanhar ${cand.nm}`}
               title="Remover"
               className="-m-1.5 flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-lg text-faint transition-colors duration-150 hover:bg-elevated hover:text-accent"

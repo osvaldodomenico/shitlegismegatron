@@ -6,6 +6,7 @@ import { Header, CARGO_LABELS } from "./components/Header";
 import { Hero } from "./components/Hero";
 import { ComparacaoPainel } from "./components/ComparacaoPainel";
 import { SeletorCandidatos } from "./components/SeletorCandidatos";
+import { ModalCidades } from "./components/ModalCidades";
 import { CandidatosTable } from "./components/CandidatosTable";
 import { ResultadoChart } from "./components/ResultadoChart";
 import { HistoricoChart } from "./components/HistoricoChart";
@@ -30,6 +31,7 @@ export default function App() {
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
   const [carregando, setCarregando] = useState(true);
+  const [candCidades, setCandCidades] = useState(null);   // candidato aberto no modal de cidades
 
   // Com selecao ativa o socket entra na room filtrada: o servidor manda so os
   // acompanhados, em vez dos 1429 candidatos da corrida.
@@ -183,6 +185,7 @@ export default function App() {
                 cargoNome={cargoNome}
                 aoAbrirSeletor={abrirSeletor}
                 aoRemover={removerCandidato}
+                aoAbrirCidades={setCandCidades}
                 carregando={carregando}
                 maximo={maximo}
                 proporcional={proporcional}
@@ -205,6 +208,14 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <ModalCidades
+        aberto={candCidades !== null}
+        aoFechar={() => setCandCidades(null)}
+        uf={uf}
+        cargo={cargo}
+        cand={candCidades}
+      />
 
       <SeletorCandidatos
         aberto={seletorAberto}

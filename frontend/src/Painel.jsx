@@ -4,6 +4,7 @@ import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, ran
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 import { SeletorCandidatos } from "./components/SeletorCandidatos";
+import { ModalCidades } from "./components/ModalCidades";
 import { IconPlus } from "./components/icons";
 
 /**
@@ -64,10 +65,13 @@ function Titulo({ titulo, lugar, data, tamanho = "text-3xl", pct = "text-4xl" })
 
 /* ------------------------------------------ linha compacta (meia coluna e ranking) */
 
-function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartido, projecao = false, apagada = false }) {
+function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartido, projecao = false, apagada = false, aoClicar }) {
   return (
     <li className={`flex items-center gap-3 rounded-xl border px-3 py-1.5 ${
-      destaque ? "border-primaryLit bg-primary/20" : "border-line bg-surface"}`}>
+      destaque ? "border-primaryLit bg-primary/20" : "border-line bg-surface"} ${
+      aoClicar ? "cursor-pointer transition-colors duration-150 hover:border-primaryLit" : ""}`}
+      onClick={aoClicar ? () => aoClicar(cand) : undefined}
+      title={aoClicar ? "Ver votação por cidade" : undefined}>
       {posicao && (
         <span className={`num w-11 shrink-0 text-right font-mono text-2xl font-bold ${destaque ? "text-primaryLit" : "text-subtle"}`}>
           {posicao}º
@@ -106,7 +110,7 @@ function Vazio({ connected, texto = "Aguardando o primeiro boletim do TSE" }) {
 
 /* ------------------------------------- faixas da coluna 1 (pres/sen/gov) */
 
-function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolher, solto = false }) {
+function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolher, solto = false, aoClicar }) {
   const todos = [...lerCandidatos(data)].sort((a, b) => num(b.vap) - num(a.vap));
   const lista = todos.slice(0, MAX_FAIXA);
   // "outros" so faz sentido sobre a corrida inteira, nao sobre uma selecao.
@@ -144,6 +148,7 @@ function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolh
             <LinhaCompacta key={c.sqcand || c.seq} cand={c} mostrarPartido
               projecao={matematicos.has(String(c.sqcand))}
               apagada={derrotado(c, matematicos, data?.v)}
+              aoClicar={aoClicar}
               proporcao={(num(c.vap) / lider) * 100}
               foto={c.foto || urlFoto(data?.cdabr || "sp", data?.ele, c.sqcand)} />
           ))}
@@ -155,7 +160,7 @@ function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolh
 
 /* ------------------------------------------------------ ranking por legenda */
 
-function ColunaRanking({ cfg, data, connected }) {
+function ColunaRanking({ cfg, data, connected, aoClicar }) {
   const { lista, total, todos } = rankingDaLegenda(lerCandidatos(data), cfg.partido, cfg.destaque, cfg.n);
   const lider = Math.max(...lista.map((c) => num(c.vap)), 1);
   const alvo = lista.find((c) => c.destaque);
@@ -218,6 +223,7 @@ function ColunaRanking({ cfg, data, connected }) {
           {lista.map((c) => (
             <LinhaCompacta key={c.sqcand || c.seq} cand={c} posicao={c.posicao} destaque={c.destaque}
               apagada={derrotado(c)}
+              aoClicar={aoClicar}
               proporcao={(num(c.vap) / lider) * 100}
               foto={c.foto || urlFoto(data?.cdabr || "sp", data?.ele, c.sqcand)} />
           ))}
@@ -292,6 +298,9 @@ export function Painel({ perfil = "padrao", editavel = false }) {
   const sen = useCorrida("sp", "senador", true, perfil);
   const gov = useCorrida("sp", "governador", true, perfil);
   const seletor = useSeletor(perfil);
+  // Modal de votacao por cidade: so no modo editavel (/apuracaogeral).
+  const [cidades, setCidades] = useState(null);   // {uf, cargo, cand}
+  const abrirCidades = editavel ? (uf, cargo) => (cand) => setCidades({ uf, cargo, cand }) : () => undefined;
   // RANKINGS e constante de modulo: o numero de hooks nao varia entre renders.
   const rankings = RANKINGS.map((cfg) => useCorrida("sp", cfg.cargo));
 
@@ -316,18 +325,23 @@ export function Painel({ perfil = "padrao", editavel = false }) {
         style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}>
         <div className={coluna1}>
           <Faixa titulo="Presidente" lugar="Brasil" data={pres.data} connected={pres.connected} temSelecao={pres.temSelecao} comOutros
-            solto={editavel} aoEscolher={editavel ? () => seletor.abrir(pres) : undefined} />
+            solto={editavel} aoEscolher={editavel ? () => seletor.abrir(pres) : undefined} aoClicar={abrirCidades("br", "presidente")} />
           <Faixa titulo="Senador" lugar="São Paulo" data={sen.data} connected={sen.connected} temSelecao={sen.temSelecao}
-            solto={editavel} aoEscolher={editavel ? () => seletor.abrir(sen) : undefined} />
+            solto={editavel} aoEscolher={editavel ? () => seletor.abrir(sen) : undefined} aoClicar={abrirCidades("sp", "senador")} />
           <Faixa titulo="Governador" lugar="São Paulo" data={gov.data} connected={gov.connected} temSelecao={gov.temSelecao}
-            solto={editavel} aoEscolher={editavel ? () => seletor.abrir(gov) : undefined} />
+            solto={editavel} aoEscolher={editavel ? () => seletor.abrir(gov) : undefined} aoClicar={abrirCidades("sp", "governador")} />
         </div>
 
         {RANKINGS.map((cfg, i) => (
-          <ColunaRanking key={cfg.cargo} cfg={cfg} data={rankings[i].data} connected={rankings[i].connected} />
+          <ColunaRanking key={cfg.cargo} cfg={cfg} data={rankings[i].data} connected={rankings[i].connected}
+            aoClicar={abrirCidades("sp", cfg.cargo)} />
         ))}
       </main>
 
+      {editavel && (
+        <ModalCidades aberto={cidades !== null} aoFechar={() => setCidades(null)}
+          uf={cidades?.uf} cargo={cidades?.cargo} cand={cidades?.cand} />
+      )}
       {editavel && (
         <SeletorCandidatos
           aberto={seletor.alvo !== null}

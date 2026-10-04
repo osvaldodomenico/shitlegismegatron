@@ -51,7 +51,7 @@ function Vazio({ aoAbrirSeletor, cargoNome }) {
 }
 
 export function ComparacaoPainel({
-  candidatos, indicadores, cargoNome, aoAbrirSeletor, aoRemover, carregando, maximo = 5,
+  candidatos, indicadores, cargoNome, aoAbrirSeletor, aoRemover, aoAbrirCidades, carregando, maximo = 5,
   proporcional = true, data = null,
 }) {
   if (carregando) {
@@ -98,6 +98,7 @@ export function ComparacaoPainel({
             corTexto={TEXTO[i % 5]}
             proporcao={(num(c.vap) / lider) * 100}
             aoRemover={aoRemover}
+            aoAbrir={aoAbrirCidades}
             proporcional={proporcional}
             projecao={matematicos.has(String(c.sqcand))}
             apagada={derrotado(c, matematicos, data?.v)}
@@ -116,7 +117,7 @@ export function ComparacaoPainel({
       )}
 
       <p className="mt-3 text-xs text-faint">
-        Barras proporcionais ao primeiro colocado da seleção. Percentual sobre os votos válidos.
+        Clique no candidato para ver a votação por cidade. Barras proporcionais ao primeiro colocado da seleção. Percentual sobre os votos válidos.
         {proporcional && " A linha de corte usa a situação publicada pelo TSE para cada agremiação."}
       </p>
     </section>

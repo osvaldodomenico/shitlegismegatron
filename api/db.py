@@ -155,3 +155,39 @@ async def carregar_todas_selecoes(pool: Optional[asyncpg.Pool]) -> List[dict]:
     except Exception as e:
         print(f"[db] Erro ao carregar selecoes: {e}")
         return []
+
+
+async def buscar_votos_por_cidade(
+    pool: Optional[asyncpg.Pool], uf: str, cargo: str, sqcand: str, nivel: str = "municipio"
+) -> List[dict]:
+    """
+    Votos de um candidato em cada cidade (ou zona) da corrida, do mais votado
+    para o menos. Explode o jsonb de `votos_municipio` sob demanda (~0,5 s em
+    645 cidades). Lista vazia se pool=None ou se o coletor ainda nao gravou.
+    """
+    if pool is None:
+        return []
+    try:
+        rows = await pool.fetch(
+            """
+            SELECT v.cod_tse, v.cod_zona, v.nome, v.pst, v.validos, v.hg, v.atualizado_em,
+                   COALESCE(NULLIF(regexp_replace(c->>'vap', '\\D', '', 'g'), '')::BIGINT, 0) AS votos,
+                   c->>'pvap' AS pct
+            FROM votos_municipio v, jsonb_array_elements(v.payload->'cand') AS c
+            WHERE v.uf = $1 AND v.cargo = $2 AND v.nivel = $3 AND c->>'sqcand' = $4
+            ORDER BY votos DESC, v.nome
+            """,
+            uf, cargo, nivel, str(sqcand),
+        )
+        return [
+            {
+                "cod": r["cod_tse"], "zona": r["cod_zona"], "nome": r["nome"],
+                "pst": float(r["pst"] or 0), "validos": int(r["validos"] or 0), "hg": r["hg"],
+                "votos": int(r["votos"] or 0), "pct": r["pct"] or "0,00",
+                "atualizado_em": str(r["atualizado_em"]),
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"[db] Erro ao buscar votos por cidade: {e}")
+        return []
