@@ -81,3 +81,22 @@ export function situacao(cand) {
 export function partido(cand) {
   return cand?.cc || cand?.sg || "";
 }
+
+/**
+ * Ranking dentro de uma legenda: os `n` mais votados do partido, garantindo o
+ * candidato `destaque` (numero de urna) na lista mesmo fora do top-n.
+ * Cada item traz `posicao` (1-based na legenda) e `destaque` (bool).
+ */
+export function rankingDaLegenda(cands, sigla, destaque, n = 10) {
+  const daLegenda = (cands || [])
+    .filter((c) => partido(c).toUpperCase() === String(sigla).toUpperCase())
+    .sort((a, b) => num(b.vap) - num(a.vap))
+    .map((c, i) => ({ ...c, posicao: i + 1, destaque: String(c.n) === String(destaque) }));
+  const top = daLegenda.slice(0, n);
+  const alvo = daLegenda.find((c) => c.destaque);
+  if (alvo && !top.includes(alvo)) {
+    top.pop();
+    top.push(alvo);
+  }
+  return { lista: top, total: daLegenda.length };
+}

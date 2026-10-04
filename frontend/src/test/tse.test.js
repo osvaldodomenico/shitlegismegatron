@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { legendaBoletim, urlFoto } from "../lib/tse";
+import { legendaBoletim, urlFoto, rankingDaLegenda } from "../lib/tse";
 
 const HOJE = "04/10/2026";
 
@@ -32,5 +32,35 @@ describe("urlFoto", () => {
       "https://resultados.tse.jus.br/oficial/ele2026/6257/fotos/br/280002551544.jpeg"
     );
     expect(urlFoto("br", "", "1")).toBeNull();
+  });
+});
+
+describe("rankingDaLegenda", () => {
+  const cands = [
+    { n: "1010", cc: "REPUBLICANOS", vap: "900" },
+    { n: "1300", cc: "PT", vap: "5000" },
+    { n: "1022", cc: "REPUBLICANOS", vap: "800" },
+    { n: "1033", cc: "REPUBLICANOS", vap: "700" },
+    { n: "1055", cc: "REPUBLICANOS", vap: "10" },
+    { n: "1044", cc: "Republicanos", vap: "600" },
+  ];
+
+  it("ordena so a legenda e numera a posicao", () => {
+    const { lista, total } = rankingDaLegenda(cands, "REPUBLICANOS", "1055", 10);
+    expect(total).toBe(5);
+    expect(lista.map((c) => c.n)).toEqual(["1010", "1022", "1033", "1044", "1055"]);
+    expect(lista.map((c) => c.posicao)).toEqual([1, 2, 3, 4, 5]);
+    expect(lista.find((c) => c.n === "1055").destaque).toBe(true);
+  });
+
+  it("fora do top-n, o destaque entra no lugar do ultimo com a posicao real", () => {
+    const { lista } = rankingDaLegenda(cands, "REPUBLICANOS", "1055", 3);
+    expect(lista.map((c) => c.n)).toEqual(["1010", "1022", "1055"]);
+    expect(lista[2].posicao).toBe(5);
+  });
+
+  it("sem o destaque na corrida, devolve so o top-n", () => {
+    const { lista } = rankingDaLegenda(cands, "REPUBLICANOS", "9999", 2);
+    expect(lista.map((c) => c.n)).toEqual(["1010", "1022"]);
   });
 });
