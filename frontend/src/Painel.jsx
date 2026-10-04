@@ -106,7 +106,7 @@ function Vazio({ connected, texto = "Aguardando o primeiro boletim do TSE" }) {
 
 /* ------------------------------------- faixas da coluna 1 (pres/sen/gov) */
 
-function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolher }) {
+function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolher, solto = false }) {
   const todos = [...lerCandidatos(data)].sort((a, b) => num(b.vap) - num(a.vap));
   const lista = todos.slice(0, MAX_FAIXA);
   // "outros" so faz sentido sobre a corrida inteira, nao sobre uma selecao.
@@ -118,7 +118,7 @@ function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolh
     : "";
 
   return (
-    <section className="flex min-h-0 flex-col px-6 py-3" aria-label={`${titulo} · ${lugar}`}>
+    <section className={`flex flex-col px-6 py-3 ${solto ? "" : "min-h-0"}`} aria-label={`${titulo} · ${lugar}`}>
       <header>
         <Titulo titulo={titulo} lugar={lugar} data={data} tamanho="text-2xl" pct="text-3xl" />
         <Secoes data={data} />
@@ -136,7 +136,7 @@ function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolh
       {lista.length === 0 ? (
         <Vazio connected={connected} />
       ) : (
-        <ol className="mt-1.5 flex min-h-0 flex-1 flex-col gap-1.5">
+        <ol className={`mt-1.5 flex flex-col gap-1.5 ${solto ? "" : "min-h-0 flex-1"}`}>
           {lista.map((c) => (
             <LinhaCompacta key={c.sqcand || c.seq} cand={c} mostrarPartido
               proporcao={(num(c.vap) / lider) * 100}
@@ -264,19 +264,29 @@ export function Painel({ perfil = "padrao", editavel = false }) {
   const aoVivo = [pres, sen, gov, ...rankings].every((c) => c.connected);
   const colunas = 1 + RANKINGS.length;
 
+  // Telao (/painel): tudo preso em 1080 de altura, sem rolagem. Editavel
+  // (/apuracaogeral): operado num navegador comum, entao a pagina rola e as
+  // faixas tem altura natural — nada se sobrepoe em janela menor.
+  const raiz = editavel
+    ? "flex min-h-screen w-screen flex-col bg-bg text-muted"
+    : "flex h-screen w-screen flex-col overflow-hidden bg-bg text-muted";
+  const coluna1 = editavel
+    ? "flex flex-col divide-y divide-line"
+    : "grid min-h-0 grid-rows-3 divide-y divide-line";
+
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg text-muted">
+    <div className={raiz}>
       <CabecalhoTelao aoVivo={aoVivo} />
 
-      <main className="grid min-h-0 flex-1 divide-x divide-line"
+      <main className={`grid flex-1 divide-x divide-line ${editavel ? "" : "min-h-0"}`}
         style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}>
-        <div className="grid min-h-0 grid-rows-3 divide-y divide-line">
+        <div className={coluna1}>
           <Faixa titulo="Presidente" lugar="Brasil" data={pres.data} connected={pres.connected} temSelecao={pres.temSelecao} comOutros
-            aoEscolher={editavel ? () => seletor.abrir(pres) : undefined} />
+            solto={editavel} aoEscolher={editavel ? () => seletor.abrir(pres) : undefined} />
           <Faixa titulo="Senador" lugar="São Paulo" data={sen.data} connected={sen.connected} temSelecao={sen.temSelecao}
-            aoEscolher={editavel ? () => seletor.abrir(sen) : undefined} />
+            solto={editavel} aoEscolher={editavel ? () => seletor.abrir(sen) : undefined} />
           <Faixa titulo="Governador" lugar="São Paulo" data={gov.data} connected={gov.connected} temSelecao={gov.temSelecao}
-            aoEscolher={editavel ? () => seletor.abrir(gov) : undefined} />
+            solto={editavel} aoEscolher={editavel ? () => seletor.abrir(gov) : undefined} />
         </div>
 
         {RANKINGS.map((cfg, i) => (
