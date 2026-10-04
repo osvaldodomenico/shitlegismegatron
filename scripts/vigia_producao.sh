@@ -54,6 +54,18 @@ if [ $? -ne 0 ]; then
     anotar "collector sem batimento: $HB"
 fi
 
+# ------------------------------- 2b) heartbeat do coletor de municipios
+# Grava o boletim de cada cidade no Postgres a cada MUN_INTERVAL_SECONDS
+# (padrao 300). Sem batimento por 3 ciclos, a apuracao por cidade para de
+# atualizar em silencio — por isso entra no mesmo alarme.
+HB_MUN="$(docker exec megatron-redis-1 redis-cli get megatron:heartbeat:municipios 2>/dev/null </dev/null)"
+if [ -z "$HB_MUN" ]; then
+    anotar "coletor de municipios sem batimento (chave ausente ou expirada)"
+else
+    ERROS_MUN="$(printf '%s' "$HB_MUN" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("erro",0))' 2>/dev/null || echo 0)"
+    [ "${ERROS_MUN:-0}" -gt 100 ] && anotar "coletor de municipios com $ERROS_MUN erros no ultimo ciclo"
+fi
+
 # --------------------------------------------- 3) as corridas configuradas
 CORRIDAS="$(python3 - "$RAIZ/.env" <<'PY'
 import sys

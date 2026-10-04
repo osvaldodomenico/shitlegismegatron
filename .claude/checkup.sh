@@ -159,6 +159,16 @@ else
         fi
     done
 
+    # Coletor por municipio: heartbeat no Redis (expira em 3 ciclos) e as
+    # 645 cidades de SP presentes em votos_municipio para cada cargo.
+    mun="$(ssh -o ConnectTimeout=10 vps2 'docker exec megatron-redis-1 redis-cli get megatron:heartbeat:municipios; docker exec megatron-timescaledb-1 psql -U megatron -d megatron -tAc "select count(distinct cargo), min(c) from (select cargo, count(*) c from votos_municipio group by cargo) t"' 2>/dev/null)"
+    if printf '%s' "$mun" | head -1 | grep -q '"ts"' \
+       && [ "$(printf '%s' "$mun" | tail -1)" = "4|645" ]; then
+        pass "coletor de municipios vivo — 645 cidades x 4 cargos no banco"
+    else
+        fail "coletor de municipios parado ou incompleto ($(printf '%s' "$mun" | tail -1))"
+    fi
+
     asset="$(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js' | head -1)"
     if [ -n "$asset" ]; then
         bytes="$(curl -s -o /tmp/megatron-prod.js -w '%{size_download}' --max-time 20 "https://$DOMINIO$asset")"

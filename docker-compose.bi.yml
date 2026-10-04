@@ -108,6 +108,35 @@ services:
       retries: 3
       start_period: 90s
 
+  # Coletor por MUNICIPIO (04/10, pedido do Domenico): grava no Postgres o
+  # boletim de cada cidade de SP para cada cargo, a cada 5 min, para a
+  # apuracao e os indicadores por cidade. Mesma imagem do collector, outro
+  # entrypoint; nao mexe no Redis de dados nem no collector principal.
+  collector_municipios:
+    <<: *logging
+    build: ./collector
+    command: ["python", "municipios.py"]
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TSE_BASE_URL: ${TSE_BASE_URL}
+      TSE_PATH_DADOS: ${TSE_PATH_DADOS:-dados}
+      TSE_SUFIXO: ${TSE_SUFIXO:-u}
+      REDIS_URL: ${REDIS_URL}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
+      ELE_1T: ${ELE_1T}
+      MUN_UF: ${MUN_UF:-sp}
+      MUN_CARGOS: ${MUN_CARGOS:-governador,senador,dep_federal,dep_estadual}
+      MUN_INTERVAL_SECONDS: ${MUN_INTERVAL_SECONDS:-300}
+      MUN_CONCURRENCY: ${MUN_CONCURRENCY:-6}
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    networks: [megatron_net]
+
   api:
     <<: *logging
     build: ./api
