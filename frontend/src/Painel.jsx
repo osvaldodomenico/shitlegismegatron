@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
 import { candidatos as lerCandidatos, num, partido, situacao, urlFoto, legendaBoletim } from "./lib/tse";
 import * as api from "./lib/api";
-import { IconBallot, IconTrophy } from "./components/icons";
+import { IconTrophy } from "./components/icons";
+import { Foto, CabecalhoTelao } from "./components/Telao";
 
 /**
  * Painel de telao (1920x1080): Presidente, Governador SP e Deputado Federal SP
@@ -18,22 +19,6 @@ const MAX_LINHAS = 6;
 
 const fmtPct = (v) => num(v).toFixed(2).replace(".", ",");
 const fmtInt = (v) => num(v).toLocaleString("pt-BR");
-
-function Foto({ src, nome }) {
-  const [falhou, setFalhou] = useState(false);
-  const iniciais = (nome || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("");
-  if (!src || falhou) {
-    return (
-      <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-elevated text-xl font-semibold text-subtle" aria-hidden="true">
-        {iniciais}
-      </div>
-    );
-  }
-  return (
-    <img src={src} alt="" width={80} height={80} onError={() => setFalhou(true)}
-      className="h-20 w-20 shrink-0 rounded-xl object-cover" />
-  );
-}
 
 function Linha({ cand, cor, proporcao, foto }) {
   const st = situacao(cand);
@@ -127,19 +112,6 @@ function Coluna({ titulo, lugar, data, connected, candidatos, rodape, vazio }) {
   );
 }
 
-function Relogio() {
-  const [agora, setAgora] = useState(new Date());
-  useEffect(() => {
-    const t = setInterval(() => setAgora(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return (
-    <span className="num font-mono text-3xl font-semibold text-muted">
-      {agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-    </span>
-  );
-}
-
 export function Painel() {
   // Presidente e governador: corrida inteira (poucos candidatos, payload pequeno).
   const pres = useElectionSocket("br", "presidente");
@@ -172,22 +144,7 @@ export function Painel() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg text-muted">
-      <header className="flex items-center justify-between border-b border-line px-10 py-4">
-        <p className="flex items-center gap-3 text-2xl font-semibold text-primaryLit">
-          <IconBallot className="h-8 w-8" />
-          MEGATRON
-          <span className="ml-3 text-lg font-normal text-faint">Eleições 2026 · 1º turno · Fonte: TSE</span>
-        </p>
-        <div className="flex items-center gap-6">
-          <Relogio />
-          <span role="status" aria-live="polite"
-            className={`flex items-center gap-2 rounded-full border px-4 py-2 text-lg font-medium ${
-              aoVivo ? "border-accent/40 bg-accent/10 text-accent" : "border-line bg-elevated text-subtle"}`}>
-            <span className={`h-3 w-3 rounded-full ${aoVivo ? "bg-accent animate-pulseSoft" : "bg-faint"}`} aria-hidden="true" />
-            {aoVivo ? "Ao vivo" : "Reconectando…"}
-          </span>
-        </div>
-      </header>
+      <CabecalhoTelao aoVivo={aoVivo} />
 
       <main className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-line">
         <Coluna titulo="Presidente" lugar="Brasil" data={pres.data} connected={pres.connected}

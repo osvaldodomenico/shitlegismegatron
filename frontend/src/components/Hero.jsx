@@ -38,7 +38,7 @@ export function Hero({ data, uf, ufNome, cargoNome, connected }) {
           <div>
             <p className="flex items-center gap-2 text-sm font-medium text-primaryLit">
               <IconBallot className="h-5 w-5" />
-              MEGATRON
+              LEGIS MEGATRON
             </p>
             <h1 className="mt-2 text-3xl font-bold leading-tight text-muted sm:text-4xl">
               {cargoNome}

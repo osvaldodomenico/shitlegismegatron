@@ -146,16 +146,18 @@ else
         fail "frontend nao respondeu HTML esperado"
     fi
 
-    # /painel (telao 1920x1080) e rota so do SPA: precisa cair no try_files do
-    # nginx e servir o MESMO bundle da raiz — se o Traefik mandar para a API
-    # vira 404/405, se o nginx nao tiver fallback vira 404.
-    painel="$(curl -sL --max-time 20 "https://$DOMINIO/painel")"
-    if printf '%s' "$painel" | grep -q 'id="root"' \
-       && [ "$(printf '%s' "$painel" | grep -oE '/assets/[^"]+\.js' | head -1)" = "$(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js' | head -1)" ]; then
-        pass "/painel servido pelo SPA com o mesmo bundle da raiz"
-    else
-        fail "/painel nao serve a aplicacao (rota do telao quebrada)"
-    fi
+    # /painel (telao 1920x1080) e /dashboard (vertical 1080x1920) sao rotas so
+    # do SPA: precisam cair no try_files do nginx e servir o MESMO bundle da
+    # raiz — se o Traefik mandar para a API vira 404/405, sem fallback vira 404.
+    for rota in /painel /dashboard; do
+        tela="$(curl -sL --max-time 20 "https://$DOMINIO$rota")"
+        if printf '%s' "$tela" | grep -q 'id="root"' \
+           && [ "$(printf '%s' "$tela" | grep -oE '/assets/[^"]+\.js' | head -1)" = "$(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js' | head -1)" ]; then
+            pass "$rota servido pelo SPA com o mesmo bundle da raiz"
+        else
+            fail "$rota nao serve a aplicacao (rota do telao quebrada)"
+        fi
+    done
 
     asset="$(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js' | head -1)"
     if [ -n "$asset" ]; then
