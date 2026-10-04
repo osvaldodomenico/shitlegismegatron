@@ -46,7 +46,9 @@ export function Selo({ cand, tamanho = "sm", projecao = false }) {
   if (!tipo && projecao) {
     return (
       <span className={`${base} bg-success/25 text-successLit`} title="Projeção matemática: o adversário não alcança mais. O TSE ainda não publicou a situação.">
-        <IconTrophy className={t.icone} />Eleito<span className="font-normal normal-case tracking-normal opacity-80">· matemático</span>
+        <IconTrophy className={t.icone} />Eleito
+        {tamanho !== "xs" && <span className="font-normal normal-case tracking-normal opacity-80">· matemático</span>}
+        {tamanho === "xs" && <span className="font-normal normal-case tracking-normal opacity-80">(mat.)</span>}
       </span>
     );
   }

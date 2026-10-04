@@ -162,7 +162,7 @@ else
     # Coletor por municipio: heartbeat no Redis (expira em 3 ciclos) e as
     # 645 cidades de SP presentes em votos_municipio para cada cargo.
     # Niveis: municipio (645 cidades) e zona (779 pares zona x cidade), x 4 cargos.
-    mun="$(ssh -o ConnectTimeout=10 vps2 'docker exec megatron-redis-1 redis-cli get megatron:heartbeat:municipios; docker exec megatron-timescaledb-1 psql -U megatron -d megatron -tAc "select nivel || \x27=\x27 || count(distinct cargo) || \x27x\x27 || min(c) from (select nivel, cargo, count(*) c from votos_municipio group by 1,2) t group by nivel order by nivel"' 2>/dev/null)"
+    mun="$(ssh -o ConnectTimeout=10 vps2 'docker exec megatron-redis-1 redis-cli get megatron:heartbeat:municipios; docker exec megatron-timescaledb-1 psql -U megatron -d megatron -tAc "select nivel || chr(61) || count(distinct cargo) || chr(120) || min(c) from (select nivel, cargo, count(*) c from votos_municipio group by 1,2) t group by nivel order by nivel"' 2>/dev/null)"
     if printf '%s' "$mun" | head -1 | grep -q '"ts"' \
        && printf '%s' "$mun" | grep -q '^municipio=4x645$' \
        && printf '%s' "$mun" | grep -q '^zona=4x779$'; then

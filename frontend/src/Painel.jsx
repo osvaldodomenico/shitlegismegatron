@@ -121,7 +121,7 @@ function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolh
     : "";
 
   return (
-    <section className={`flex flex-col px-6 py-3 ${solto ? "" : "min-h-0"}`} aria-label={`${titulo} · ${lugar}`}>
+    <section className={`flex min-w-0 flex-col overflow-hidden px-6 py-3 ${solto ? "" : "min-h-0"}`} aria-label={`${titulo} · ${lugar}`}>
       <header>
         <Titulo titulo={titulo} lugar={lugar} data={data} tamanho="text-2xl" pct="text-3xl" />
         <Secoes data={data} />
@@ -163,7 +163,7 @@ function ColunaRanking({ cfg, data, connected }) {
   const vp = votosDoPartido(data, cfg.partido);
 
   return (
-    <section className="flex min-h-0 flex-col px-6 py-5" aria-label={`${cfg.titulo} · São Paulo · ${cfg.partido}`}>
+    <section className="flex min-h-0 min-w-0 flex-col overflow-hidden px-6 py-5" aria-label={`${cfg.titulo} · São Paulo · ${cfg.partido}`}>
       <header>
         <Titulo titulo={cfg.titulo} lugar="São Paulo" data={data} />
         <Secoes data={data} />
