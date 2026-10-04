@@ -12,19 +12,21 @@ export const MARCA = "LEGIS MEGATRON";
 
 export const fmtPct = (v, num) => num(v).toFixed(2).replace(".", ",");
 
-export function Foto({ src, nome, tamanho = "h-20 w-20", texto = "text-xl" }) {
+export function Foto({ src, nome, tamanho = "h-20 w-20", texto = "text-xl", apagada = false }) {
+  // Derrotado = foto em preto e branco (pedido de 04/10): le-se de longe.
+  const tom = apagada ? "grayscale opacity-70" : "";
   const [falhou, setFalhou] = useState(false);
   const iniciais = (nome || "?").split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("");
   if (!src || falhou) {
     return (
-      <div className={`flex ${tamanho} shrink-0 items-center justify-center rounded-xl bg-elevated ${texto} font-semibold text-subtle`} aria-hidden="true">
+      <div className={`flex ${tamanho} shrink-0 items-center justify-center rounded-xl bg-elevated ${texto} font-semibold text-subtle ${tom}`} aria-hidden="true">
         {iniciais}
       </div>
     );
   }
   return (
     <img src={src} alt="" onError={() => setFalhou(true)}
-      className={`${tamanho} shrink-0 rounded-xl object-cover`} />
+      className={`${tamanho} shrink-0 rounded-xl object-cover ${tom}`} />
   );
 }
 

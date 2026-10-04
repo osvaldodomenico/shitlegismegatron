@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { num, partido } from "../lib/tse";
+import { num, partido, derrotado } from "../lib/tse";
 import { IconClose, IconAlert } from "./icons";
 import { Selo } from "./Telao";
 
@@ -10,7 +10,8 @@ import { Selo } from "./Telao";
  * deputado federal o primeiro colocado tem ~4% e barras contra 100% ficariam
  * todas invisiveis. O percentual real continua escrito, para nao enganar.
  */
-function Foto({ src, nome, cor }) {
+function Foto({ src, nome, cor, apagada = false }) {
+  const tom = apagada ? "grayscale opacity-70" : "";
   const [falhou, setFalhou] = useState(false);
   const iniciais = (nome || "?")
     .split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("");
@@ -18,7 +19,7 @@ function Foto({ src, nome, cor }) {
   if (!src || falhou) {
     return (
       <div
-        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-elevated text-sm font-semibold ${cor}`}
+        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-elevated text-sm font-semibold ${cor} ${tom}`}
         aria-hidden="true"
       >
         {iniciais}
@@ -33,7 +34,7 @@ function Foto({ src, nome, cor }) {
       height={56}
       loading="lazy"
       onError={() => setFalhou(true)}
-      className="h-14 w-14 shrink-0 rounded-lg object-cover"
+      className={`h-14 w-14 shrink-0 rounded-lg object-cover ${tom}`}
     />
   );
 }
@@ -61,7 +62,7 @@ function LinhaDeCorte({ ind }) {
   );
 }
 
-export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover, proporcional = true, projecao = false }) {
+export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover, proporcional = true, projecao = false, apagada = false }) {
   // Em majoritaria os indicadores de legenda nao se aplicam: nem chip, nem corte.
   const ind = proporcional ? cand.ind : null;
   const votos = num(cand.vap);
@@ -71,7 +72,7 @@ export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover, propo
   return (
     <li className="rounded-xl border border-line bg-surface p-4">
       <div className="flex items-start gap-3">
-        <Foto src={cand.foto} nome={cand.nm} cor={corTexto} />
+        <Foto src={cand.foto} nome={cand.nm} cor={corTexto} apagada={apagada} />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">

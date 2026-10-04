@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes, votosDoPartido, eleitosMatematicos, corProgresso } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes, votosDoPartido, eleitosMatematicos, corProgresso, derrotado } from "./lib/tse";
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 import { SeletorCandidatos } from "./components/SeletorCandidatos";
@@ -64,7 +64,7 @@ function Titulo({ titulo, lugar, data, tamanho = "text-3xl", pct = "text-4xl" })
 
 /* ------------------------------------------ linha compacta (meia coluna e ranking) */
 
-function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartido, projecao = false }) {
+function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartido, projecao = false, apagada = false }) {
   return (
     <li className={`flex items-center gap-3 rounded-xl border px-3 py-1.5 ${
       destaque ? "border-primaryLit bg-primary/20" : "border-line bg-surface"}`}>
@@ -73,7 +73,7 @@ function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartid
           {posicao}º
         </span>
       )}
-      <Foto src={foto} nome={cand.nm} tamanho="h-12 w-12" texto="text-sm" />
+      <Foto src={foto} nome={cand.nm} tamanho="h-12 w-12" texto="text-sm" apagada={apagada} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
           <p className={`flex min-w-0 items-center gap-2 truncate text-lg font-semibold leading-tight ${destaque ? "text-primaryLit" : "text-muted"}`}>
@@ -143,6 +143,7 @@ function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolh
           {lista.map((c) => (
             <LinhaCompacta key={c.sqcand || c.seq} cand={c} mostrarPartido
               projecao={matematicos.has(String(c.sqcand))}
+              apagada={derrotado(c, matematicos, data?.v)}
               proporcao={(num(c.vap) / lider) * 100}
               foto={c.foto || urlFoto(data?.cdabr || "sp", data?.ele, c.sqcand)} />
           ))}
@@ -216,6 +217,7 @@ function ColunaRanking({ cfg, data, connected }) {
         <ol className="mt-3 flex min-h-0 flex-1 flex-col gap-1.5">
           {lista.map((c) => (
             <LinhaCompacta key={c.sqcand || c.seq} cand={c} posicao={c.posicao} destaque={c.destaque}
+              apagada={derrotado(c)}
               proporcao={(num(c.vap) / lider) * 100}
               foto={c.foto || urlFoto(data?.cdabr || "sp", data?.ele, c.sqcand)} />
           ))}

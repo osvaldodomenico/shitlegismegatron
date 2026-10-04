@@ -205,3 +205,18 @@ export function corProgresso(pst) {
   const p = Math.min(100, Math.max(0, num(pst)));
   return `hsl(${Math.round(p * 1.2)} 80% 48%)`;
 }
+
+/**
+ * Candidato DERROTADO: o TSE ja disse "Nao eleito"/"Suplente", ou — em
+ * majoritaria — as vagas ja estao matematicamente decididas e ele ficou de
+ * fora. A interface apaga a foto (preto e branco) nesses casos.
+ * `matematicos` e o Set de eleitosMatematicos; `vagas` e `v` da corrida.
+ */
+export function derrotado(cand, matematicos = null, vagas = 1) {
+  const { tipo } = classificarSituacao(cand);
+  if (tipo === "nao_eleito" || tipo === "suplente") return true;
+  if (tipo === "eleito" || tipo === "segundo_turno") return false;
+  if (!matematicos || matematicos.size === 0) return false;
+  const n = Math.max(1, Math.floor(num(vagas)) || 1);
+  return matematicos.size >= n && !matematicos.has(String(cand.sqcand));
+}

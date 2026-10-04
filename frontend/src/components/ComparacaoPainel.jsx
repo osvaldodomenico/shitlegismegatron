@@ -1,4 +1,4 @@
-import { num, eleitosMatematicos } from "../lib/tse";
+import { num, eleitosMatematicos, derrotado } from "../lib/tse";
 import { CandidatoCard } from "./CandidatoCard";
 import { IconUsers, IconPlus } from "./icons";
 
@@ -100,6 +100,7 @@ export function ComparacaoPainel({
             aoRemover={aoRemover}
             proporcional={proporcional}
             projecao={matematicos.has(String(c.sqcand))}
+            apagada={derrotado(c, matematicos, data?.v)}
           />
         ))}
       </ol>

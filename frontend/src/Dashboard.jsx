@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, urlFoto, horaAtualizacao, eleitosMatematicos, corProgresso } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, horaAtualizacao, eleitosMatematicos, corProgresso, derrotado } from "./lib/tse";
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 
@@ -25,12 +25,12 @@ const POR_FAIXA = 5;
 const fmtPct = (v) => num(v).toFixed(2).replace(".", ",");
 const fmtInt = (v) => num(v).toLocaleString("pt-BR");
 
-function Card({ cand, proporcao, foto, proporcional, projecao = false }) {
+function Card({ cand, proporcao, foto, proporcional, projecao = false, apagada = false }) {
   const ind = proporcional ? cand.ind : null;
   return (
     <li className="flex min-w-0 flex-col rounded-2xl border border-line bg-surface p-3">
       <div className="flex items-start justify-between gap-2">
-        <Foto src={foto} nome={cand.nm} tamanho="h-14 w-14" texto="text-base" />
+        <Foto src={foto} nome={cand.nm} tamanho="h-14 w-14" texto="text-base" apagada={apagada} />
         <Selo cand={cand} tamanho="xs" projecao={projecao} />
       </div>
       <p className="mt-2.5 line-clamp-2 min-h-[2.25rem] text-base font-semibold leading-tight text-muted" title={cand.nm}>
@@ -101,6 +101,7 @@ function Faixa({ pleito, data, connected, temSelecao }) {
           {cands.map((c) => (
             <Card key={c.sqcand || c.seq} cand={c} proporcional={pleito.proporcional}
               projecao={matematicos.has(String(c.sqcand))}
+              apagada={derrotado(c, matematicos, data?.v)}
               proporcao={(num(c.vap) / lider) * 100}
               foto={c.foto || urlFoto(data?.cdabr || pleito.uf, data?.ele, c.sqcand)} />
           ))}

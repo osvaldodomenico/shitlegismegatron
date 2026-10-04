@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal, votosDoPartido, eleitosMatematicos, corProgresso } from "../lib/tse";
+import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal, votosDoPartido, eleitosMatematicos, corProgresso, derrotado } from "../lib/tse";
 
 const HOJE = "04/10/2026";
 
@@ -151,5 +151,23 @@ describe("corProgresso", () => {
     expect(corProgresso("50,00")).toBe("hsl(60 80% 48%)");
     expect(corProgresso("100,00")).toBe("hsl(120 80% 48%)");
     expect(corProgresso("150")).toBe("hsl(120 80% 48%)");
+  });
+});
+
+describe("derrotado", () => {
+  it("pelo TSE: nao eleito e suplente apagam; eleito e 2o turno nunca", () => {
+    expect(derrotado({ st: "Não eleito" })).toBe(true);
+    expect(derrotado({ st: "Suplente" })).toBe(true);
+    expect(derrotado({ st: "Eleito por QP" }, new Set(["x"]), 1)).toBe(false);
+    expect(derrotado({ st: "2º turno" }, new Set(["x"]), 1)).toBe(false);
+  });
+
+  it("pela projecao: so quando TODAS as vagas estao decididas e ele ficou fora", () => {
+    const fora = { sqcand: "B", st: "" };
+    expect(derrotado(fora, new Set(["A"]), 1)).toBe(true);        // 1 vaga decidida
+    expect(derrotado(fora, new Set(["A"]), 2)).toBe(false);       // senador: falta 1 vaga
+    expect(derrotado(fora, new Set(["A", "C"]), 2)).toBe(true);
+    expect(derrotado(fora, new Set(), 1)).toBe(false);
+    expect(derrotado({ sqcand: "A", st: "" }, new Set(["A"]), 1)).toBe(false);
   });
 });
