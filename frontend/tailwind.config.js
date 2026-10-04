@@ -8,26 +8,26 @@ export default {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {
+      // Os valores vivem em src/index.css (:root = escuro, .light = claro) como
+      // triplas RGB, para que bg-primary/20 etc. continuem funcionando.
       colors: {
-        bg: "#0a0a1a",
-        surface: "#12122a",
-        elevated: "#1a1a38",      // cards sobre surface (escala de elevacao)
-        line: "#262650",          // bordas e divisores, visiveis no escuro
-        primary: "#1565C0",
-        primaryLit: "#3B82F6",    // hover/foco: o primary puro fica escuro demais
-        accent: "#F97316",        // "ao vivo", CTA — contraste >=3:1 no bg
-        success: "#2E7D32",
-        successLit: "#4ADE80",
-        muted: "#E8EAF6",         // texto principal
-        subtle: "#9FA8DA",        // texto secundario (>=4.5:1 sobre bg)
-        faint: "#6B7299",         // texto terciario, so para rotulos curtos
-        // Series do comparativo: distinguiveis entre si e sem depender de
-        // par vermelho/verde (daltonismo). Sempre acompanhadas de nome/numero.
-        s1: "#38BDF8",
-        s2: "#FBBF24",
-        s3: "#34D399",
-        s4: "#F472B6",
-        s5: "#A78BFA",
+        bg: "rgb(var(--c-bg) / <alpha-value>)",
+        surface: "rgb(var(--c-surface) / <alpha-value>)",
+        elevated: "rgb(var(--c-elevated) / <alpha-value>)",
+        line: "rgb(var(--c-line) / <alpha-value>)",
+        primary: "rgb(var(--c-primary) / <alpha-value>)",
+        primaryLit: "rgb(var(--c-primaryLit) / <alpha-value>)",
+        accent: "rgb(var(--c-accent) / <alpha-value>)",
+        success: "rgb(var(--c-success) / <alpha-value>)",
+        successLit: "rgb(var(--c-successLit) / <alpha-value>)",
+        muted: "rgb(var(--c-muted) / <alpha-value>)",
+        subtle: "rgb(var(--c-subtle) / <alpha-value>)",
+        faint: "rgb(var(--c-faint) / <alpha-value>)",
+        s1: "rgb(var(--c-s1) / <alpha-value>)",
+        s2: "rgb(var(--c-s2) / <alpha-value>)",
+        s3: "rgb(var(--c-s3) / <alpha-value>)",
+        s4: "rgb(var(--c-s4) / <alpha-value>)",
+        s5: "rgb(var(--c-s5) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["'Fira Sans'", "system-ui", "sans-serif"],

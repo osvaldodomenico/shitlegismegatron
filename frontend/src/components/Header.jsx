@@ -1,3 +1,4 @@
+import { BotaoTema } from "./BotaoTema";
 /**
  * Barra superior: escolha de abrangencia e cargo.
  *
@@ -46,6 +47,8 @@ export function Header({ uf, cargo, corridas, onUfChange, onCargoChange }) {
             <option key={c.cargo} value={c.cargo}>{c.cargo_nome}</option>
           ))}
         </select>
+
+        <BotaoTema className="ml-auto" />
       </nav>
     </header>
   );

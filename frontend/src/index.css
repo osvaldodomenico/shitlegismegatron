@@ -3,6 +3,29 @@
 @tailwind utilities;
 
 @layer base {
+  /* Paleta escura (padrao) — triplas RGB consumidas pelo tailwind.config.js. */
+  :root {
+    color-scheme: dark;
+    --c-bg: 10 10 26;        --c-surface: 18 18 42;   --c-elevated: 26 26 56;
+    --c-line: 38 38 80;      --c-primary: 21 101 192; --c-primaryLit: 59 130 246;
+    --c-accent: 249 115 22;  --c-success: 46 125 50;  --c-successLit: 74 222 128;
+    --c-muted: 232 234 246;  --c-subtle: 159 168 218; --c-faint: 107 114 153;
+    --c-s1: 56 189 248; --c-s2: 251 191 36; --c-s3: 52 211 153; --c-s4: 244 114 182; --c-s5: 167 139 250;
+  }
+  /* Paleta clara: mesmos papeis, contraste >= 4.5:1 para texto sobre bg/surface. */
+  .light {
+    color-scheme: light;
+    --c-bg: 244 245 250;     --c-surface: 255 255 255; --c-elevated: 236 239 246;
+    --c-line: 214 218 232;   --c-primary: 21 101 192;  --c-primaryLit: 29 78 216;
+    --c-accent: 234 88 12;   --c-success: 22 101 52;   --c-successLit: 21 128 61;
+    --c-muted: 15 23 42;     --c-subtle: 71 85 105;    --c-faint: 100 116 139;
+    --c-s1: 2 132 199; --c-s2: 202 138 4; --c-s3: 5 150 105; --c-s4: 219 39 119; --c-s5: 124 58 237;
+  }
+
+  /* Recharts escreve a cor como atributo; a regra CSS vence o atributo e
+     acompanha o tema. */
+  .recharts-line-curve { stroke: rgb(var(--c-primaryLit)); }
+
   /* Numeros de votos e percentuais em largura fixa: sem isso a tabela
      "dança" a cada push do WebSocket. */
   .num { font-feature-settings: "tnum" 1; font-variant-numeric: tabular-nums; }

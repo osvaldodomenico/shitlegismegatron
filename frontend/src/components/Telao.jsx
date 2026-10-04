@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { IconBallot } from "./icons";
+import { BotaoTema } from "./BotaoTema";
 
 /**
  * Pecas compartilhadas pelas telas de telao (/painel e /dashboard): marca,
@@ -53,14 +54,16 @@ export function AoVivo({ ok, className = "text-lg" }) {
 export function CabecalhoTelao({ aoVivo, relogio = "text-3xl", titulo = "text-2xl" }) {
   return (
     <header className="flex items-center justify-between border-b border-line px-10 py-4">
-      <p className={`flex items-center gap-3 font-semibold text-primaryLit ${titulo}`}>
-        <IconBallot className="h-8 w-8" />
+      <p className={`flex items-center gap-3 whitespace-nowrap font-semibold text-primaryLit ${titulo}`}>
+        <IconBallot className="h-8 w-8 shrink-0" />
         {MARCA}
-        <span className="ml-3 text-lg font-normal text-faint">Eleições 2026 · 1º turno · Fonte: TSE</span>
+        {/* Em 1080 de largura (dashboard vertical) o subtitulo nao cabe ao lado do relogio e do botao de tema. */}
+        <span className="ml-3 hidden text-lg font-normal text-faint 2xl:inline">Eleições 2026 · 1º turno · Fonte: TSE</span>
       </p>
       <div className="flex items-center gap-6">
         <Relogio className={relogio} />
         <AoVivo ok={aoVivo} />
+        <BotaoTema />
       </div>
     </header>
   );
