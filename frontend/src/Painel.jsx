@@ -7,25 +7,23 @@ import { Foto, CabecalhoTelao } from "./components/Telao";
 
 /**
  * Painel de telao (1920x1080), da esquerda para a direita:
- *   1. Presidente — corrida inteira, os 6 mais votados + "outros".
- *   2. Senador (em cima) e Governador (embaixo) — os acompanhados da tela
- *      principal; sem selecao, os 5 mais votados.
- *   3+. Uma coluna por RANKING: os mais votados de UMA legenda num cargo
- *      proporcional, com o candidato em destaque mesmo fora do top.
+ *   1. Presidente, Senador e Governador empilhados — presidente com os 3 mais
+ *      votados; senador e governador com os acompanhados da tela principal
+ *      (sem selecao, os 3 mais votados).
+ *   2+. Uma coluna por RANKING: os mais votados de UMA legenda num cargo
+ *      proporcional; `destaque` (numero de urna) e opcional e, quando existe,
+ *      entra na lista mesmo fora do top.
  *
  * Nada e clicavel — a tela fica aberta num monitor e se atualiza sozinha pelo
  * WebSocket.
  */
 
-const CORES = ["bg-s1", "bg-s2", "bg-s3", "bg-s4", "bg-s5", "bg-primaryLit", "bg-subtle", "bg-faint"];
-const MAX_LINHAS = 6;   // presidente
-const MAX_MEIA = 5;     // senador / governador (meia coluna)
+const MAX_FAIXA = 3;    // linhas por faixa na coluna 1
 
-// Rankings por legenda, um por coluna. Para ligar a estadual, basta
-// acrescentar a entrada com o numero de urna do candidato em destaque.
+// Rankings por legenda, um por coluna, na ordem da tela.
 const RANKINGS = [
-  { cargo: "dep_federal", titulo: "Deputado Federal", partido: "REPUBLICANOS", destaque: "1055", n: 10 },
-  // { cargo: "dep_estadual", titulo: "Deputado Estadual", partido: "REPUBLICANOS", destaque: "?????", n: 10 },
+  { cargo: "dep_estadual", titulo: "Deputado Estadual", partido: "REPUBLICANOS", destaque: null,   n: 10 },
+  { cargo: "dep_federal",  titulo: "Deputado Federal",  partido: "REPUBLICANOS", destaque: "1055", n: 10 },
 ];
 
 const fmtPct = (v) => num(v).toFixed(2).replace(".", ",");
@@ -71,74 +69,6 @@ function Titulo({ titulo, lugar, data, tamanho = "text-3xl", pct = "text-4xl" })
   );
 }
 
-/* ----------------------------------------------------------- presidente */
-
-function Linha({ cand, cor, proporcao, foto }) {
-  const st = situacao(cand);
-  const eleito = eEleito(cand);
-  return (
-    <li className="flex items-center gap-4 rounded-2xl border border-line bg-surface px-4 py-3">
-      <Foto src={foto} nome={cand.nm} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-4">
-          <div className="min-w-0">
-            <p className="truncate text-xl font-semibold leading-tight text-muted">{cand.nmu || cand.nm}</p>
-            <p className="mt-1 flex items-center gap-2.5 truncate text-base text-subtle">
-              <span className="num rounded bg-elevated px-2 py-0.5 font-mono text-lg font-bold text-muted">{cand.n}</span>
-              <span className="font-semibold uppercase">{partido(cand)}</span>
-              {eleito ? <Eleito /> : st && (
-                <span className="rounded bg-elevated px-2 py-0.5 text-sm font-medium text-subtle">{st}</span>
-              )}
-            </p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="num font-mono text-3xl font-bold leading-none text-muted">
-              {fmtPct(cand.pvap)}<span className="text-lg font-normal text-subtle">%</span>
-            </p>
-            <p className="num mt-1 font-mono text-sm text-subtle">{fmtInt(cand.vap)} votos</p>
-          </div>
-        </div>
-        <div className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-elevated">
-          <div className={`h-full rounded-full ${cor} transition-[width] duration-700 ease-out`}
-            style={{ width: `${Math.max(proporcao, 1)}%` }} />
-        </div>
-      </div>
-    </li>
-  );
-}
-
-function ColunaPresidente({ data, connected }) {
-  const todos = [...lerCandidatos(data)].sort((a, b) => num(b.vap) - num(a.vap));
-  const top = todos.slice(0, MAX_LINHAS);
-  const resto = todos.slice(MAX_LINHAS);
-  const lider = Math.max(...top.map((c) => num(c.vap)), 1);
-
-  return (
-    <section className="flex min-h-0 flex-col px-6 py-5" aria-label="Presidente · Brasil">
-      <header>
-        <Titulo titulo="Presidente" lugar="Brasil" data={data} />
-        <Secoes data={data} />
-      </header>
-      {top.length === 0 ? (
-        <Vazio connected={connected} />
-      ) : (
-        <ol className="mt-4 flex min-h-0 flex-1 flex-col gap-2.5">
-          {top.map((c, i) => (
-            <Linha key={c.sqcand || c.seq} cand={c} cor={CORES[i % CORES.length]}
-              proporcao={(num(c.vap) / lider) * 100}
-              foto={c.foto || urlFoto(data?.cdabr || "br", data?.ele, c.sqcand)} />
-          ))}
-        </ol>
-      )}
-      {resto.length > 0 && (
-        <p className="mt-3 text-sm text-faint">
-          Outros {resto.length} candidatos: {fmtPct(resto.reduce((s, c) => s + num(c.pvap), 0))}% dos votos válidos
-        </p>
-      )}
-    </section>
-  );
-}
-
 /* ------------------------------------------ linha compacta (meia coluna e ranking) */
 
 function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartido }) {
@@ -179,31 +109,35 @@ function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartid
 
 function Vazio({ connected, texto = "Aguardando o primeiro boletim do TSE" }) {
   return (
-    <p className="mt-6 rounded-2xl border border-dashed border-line px-6 py-8 text-center text-lg text-subtle">
+    <p className="mt-3 rounded-2xl border border-dashed border-line px-6 py-5 text-center text-base text-subtle">
       {connected ? texto : "Reconectando…"}
     </p>
   );
 }
 
-/* ------------------------------------------------- senador / governador */
+/* ------------------------------------- faixas da coluna 1 (pres/sen/gov) */
 
-function MeiaColuna({ titulo, lugar, data, connected, temSelecao }) {
+function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros }) {
   const todos = [...lerCandidatos(data)].sort((a, b) => num(b.vap) - num(a.vap));
-  const lista = todos.slice(0, MAX_MEIA);
+  const lista = todos.slice(0, MAX_FAIXA);
+  const resto = comOutros ? todos.slice(MAX_FAIXA) : [];
   const lider = Math.max(...lista.map((c) => num(c.vap)), 1);
-  const origem = temSelecao ? "Acompanhados" : `${MAX_MEIA} mais votados`;
+  const origem = temSelecao ? "Acompanhados" : `${MAX_FAIXA} mais votados`;
+  const outros = resto.length
+    ? ` · outros ${resto.length}: ${fmtPct(resto.reduce((t, c) => t + num(c.pvap), 0))}% dos válidos`
+    : "";
 
   return (
-    <section className="flex min-h-0 flex-col px-6 py-4" aria-label={`${titulo} · ${lugar}`}>
+    <section className="flex min-h-0 flex-col px-6 py-3" aria-label={`${titulo} · ${lugar}`}>
       <header>
         <Titulo titulo={titulo} lugar={lugar} data={data} tamanho="text-2xl" pct="text-3xl" />
         <Secoes data={data} />
-        <p className="mt-2 text-xs uppercase tracking-wider text-faint">{origem}</p>
+        <p className="mt-1.5 text-xs uppercase tracking-wider text-faint">{origem}{outros}</p>
       </header>
       {lista.length === 0 ? (
         <Vazio connected={connected} />
       ) : (
-        <ol className="mt-2 flex min-h-0 flex-1 flex-col gap-1.5">
+        <ol className="mt-1.5 flex min-h-0 flex-1 flex-col gap-1.5">
           {lista.map((c) => (
             <LinhaCompacta key={c.sqcand || c.seq} cand={c} mostrarPartido
               proporcao={(num(c.vap) / lider) * 100}
@@ -279,7 +213,7 @@ export function Painel() {
   const rankings = RANKINGS.map((cfg) => useCorrida("sp", cfg.cargo));
 
   const aoVivo = [pres, sen, gov, ...rankings].every((c) => c.connected);
-  const colunas = 2 + RANKINGS.length;
+  const colunas = 1 + RANKINGS.length;
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-bg text-muted">
@@ -287,11 +221,10 @@ export function Painel() {
 
       <main className="grid min-h-0 flex-1 divide-x divide-line"
         style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}>
-        <ColunaPresidente data={pres.data} connected={pres.connected} />
-
-        <div className="grid min-h-0 grid-rows-2 divide-y divide-line">
-          <MeiaColuna titulo="Senador" lugar="São Paulo" data={sen.data} connected={sen.connected} temSelecao={sen.temSelecao} />
-          <MeiaColuna titulo="Governador" lugar="São Paulo" data={gov.data} connected={gov.connected} temSelecao={gov.temSelecao} />
+        <div className="grid min-h-0 grid-rows-3 divide-y divide-line">
+          <Faixa titulo="Presidente" lugar="Brasil" data={pres.data} connected={pres.connected} comOutros />
+          <Faixa titulo="Senador" lugar="São Paulo" data={sen.data} connected={sen.connected} temSelecao={sen.temSelecao} />
+          <Faixa titulo="Governador" lugar="São Paulo" data={gov.data} connected={gov.connected} temSelecao={gov.temSelecao} />
         </div>
 
         {RANKINGS.map((cfg, i) => (
