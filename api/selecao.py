@@ -15,28 +15,58 @@ A selecao e compartilhada (todos veem a mesma), entao cabe cache em memoria:
 o Postgres e a fonte da verdade e o cache evita um SELECT por broadcast.
 """
 import os
-from typing import Dict, List, Sequence
+import re
+from typing import Dict, List, Sequence, Tuple
 
 # Era 5 (cabia no painel). Em 04/10 o Domenico pediu para tirar a trava: o
 # limite vira so uma protecao contra payload absurdo, configuravel por env.
 MAX_SELECIONADOS = int(os.environ.get("MAX_SELECIONADOS", "50"))
 
-# chave "uf:cargo" -> lista de sqcand, na ordem escolhida pelo usuario
+# PERFIS: a mesma corrida pode ter listas de acompanhados independentes —
+# "padrao" e a da tela principal e do /painel; "geral" e a do /apuracaogeral.
+# Um perfil nao enxerga nem altera o outro.
+PERFIL_PADRAO = "padrao"
+_PERFIL_VALIDO = re.compile(r"^[a-z0-9_-]{1,32}$")
+
+# chave "uf:cargo:perfil" -> lista de sqcand, na ordem escolhida pelo usuario
 _cache: Dict[str, List[str]] = {}
 
 
-def chave(uf: str, cargo: str) -> str:
-    return f"{uf}:{cargo}"
+def validar_perfil(perfil: str) -> str:
+    """Nome de perfil seguro para virar chave de cache, room e linha no banco."""
+    perfil = (perfil or PERFIL_PADRAO).strip().lower()
+    if not _PERFIL_VALIDO.match(perfil):
+        raise ValueError(f"perfil invalido: {perfil!r} (use a-z, 0-9, '-' ou '_')")
+    return perfil
 
 
-def get(uf: str, cargo: str) -> List[str]:
+def chave(uf: str, cargo: str, perfil: str = PERFIL_PADRAO) -> str:
+    return f"{uf}:{cargo}:{perfil}"
+
+
+def room(uf: str, cargo: str, perfil: str = PERFIL_PADRAO) -> str:
+    """Room do WebSocket da selecao. O perfil padrao mantem o nome antigo."""
+    base = f"{uf}:{cargo}:sel"
+    return base if perfil == PERFIL_PADRAO else f"{base}:{perfil}"
+
+
+def get(uf: str, cargo: str, perfil: str = PERFIL_PADRAO) -> List[str]:
     """Selecao atual. Lista vazia significa 'sem filtro'."""
-    return _cache.get(chave(uf, cargo), [])
+    return _cache.get(chave(uf, cargo, perfil), [])
 
 
-def set_cache(uf: str, cargo: str, sqcands: Sequence[str]) -> None:
+def set_cache(uf: str, cargo: str, sqcands: Sequence[str], perfil: str = PERFIL_PADRAO) -> None:
     """Atualiza o cache. Quem persiste no Postgres e a camada de rotas."""
-    _cache[chave(uf, cargo)] = [str(s) for s in sqcands]
+    _cache[chave(uf, cargo, perfil)] = [str(s) for s in sqcands]
+
+
+def perfis_com_selecao(uf: str, cargo: str) -> List[Tuple[str, List[str]]]:
+    """(perfil, sqcands) de cada perfil que tem selecao nessa corrida."""
+    prefixo = f"{uf}:{cargo}:"
+    return [
+        (k[len(prefixo):], v) for k, v in _cache.items()
+        if k.startswith(prefixo) and v
+    ]
 
 
 def limpar_cache() -> None:

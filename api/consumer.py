@@ -118,16 +118,18 @@ async def start_consumer(manager: ConnectionManager, pool) -> None:
                     # dep_federal de SP sao ~2 KB por push em vez de ~240 KB.
                     # So e montada se houver alguem escutando E selecao ativa,
                     # para nao pagar o filtro a toa.
+                    # Uma room por PERFIL de selecao (padrao, geral, ...).
                     uf_b, cargo_b = uf_cargo.split(":", 1)
-                    escolhidos = sel.get(uf_b, cargo_b)
-                    if escolhidos and manager.rooms.get(f"{room}:sel"):
-                        await manager.broadcast(
-                            f"{room}:sel",
-                            json.dumps(
-                                apuracao.preparar(data, uf_b, escolhidos),
-                                ensure_ascii=False,
-                            ),
-                        )
+                    for perfil, escolhidos in sel.perfis_com_selecao(uf_b, cargo_b):
+                        room_sel = sel.room(uf_b, cargo_b, perfil)
+                        if manager.rooms.get(room_sel):
+                            await manager.broadcast(
+                                room_sel,
+                                json.dumps(
+                                    apuracao.preparar(data, uf_b, escolhidos),
+                                    ensure_ascii=False,
+                                ),
+                            )
 
                     # persist to TimescaleDB
                     parts = stream_key.split(":")  # ["megatron", "sp", "governador"]

@@ -37,9 +37,10 @@ CREATE_SELECAO = """
 CREATE TABLE IF NOT EXISTS selecao (
     uf             TEXT NOT NULL,
     cargo          TEXT NOT NULL,
+    perfil         TEXT NOT NULL DEFAULT 'padrao',
     sqcands        TEXT[] NOT NULL DEFAULT '{}',
     atualizado_em  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (uf, cargo)
+    PRIMARY KEY (uf, cargo, perfil)
 );
 """
 

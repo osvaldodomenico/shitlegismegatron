@@ -149,7 +149,7 @@ else
     # /painel (telao 1920x1080) e /dashboard (vertical 1080x1920) sao rotas so
     # do SPA: precisam cair no try_files do nginx e servir o MESMO bundle da
     # raiz — se o Traefik mandar para a API vira 404/405, sem fallback vira 404.
-    for rota in /painel /dashboard; do
+    for rota in /painel /dashboard /apuracaogeral; do
         tela="$(curl -sL --max-time 20 "https://$DOMINIO$rota")"
         if printf '%s' "$tela" | grep -q 'id="root"' \
            && [ "$(printf '%s' "$tela" | grep -oE '/assets/[^"]+\.js' | head -1)" = "$(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js' | head -1)" ]; then
@@ -257,6 +257,15 @@ EOF
         fi
     else
         fail "/candidatos nao respondeu em $CORRIDA"
+    fi
+
+    # Perfil "geral" (/apuracaogeral) e independente do padrao: responde com o
+    # proprio nome e nunca com a lista do painel.
+    if curl -sL --max-time 20 "https://$DOMINIO/selecao/$CORRIDA?perfil=geral" -o /tmp/megatron-sel-geral.json \
+       && "$PY" -c "import json,sys; d=json.load(open('/tmp/megatron-sel-geral.json')); sys.exit(0 if d.get('perfil')=='geral' and isinstance(d.get('sqcands'),list) else 1)"; then
+        pass "/selecao?perfil=geral responde com lista propria"
+    else
+        fail "/selecao?perfil=geral nao respondeu como esperado"
     fi
 
     if curl -sL --max-time 20 "https://$DOMINIO/selecao/$CORRIDA" -o /tmp/megatron-sel.json \

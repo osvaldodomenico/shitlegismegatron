@@ -99,13 +99,16 @@ async def buscar_historico(pool: Optional[asyncpg.Pool], uf: str, cargo: str, ul
         return []
 
 
-async def buscar_selecao(pool: Optional[asyncpg.Pool], uf: str, cargo: str) -> List[str]:
-    """sqcands acompanhados nessa corrida. Lista vazia se pool=None ou sem linha."""
+async def buscar_selecao(
+    pool: Optional[asyncpg.Pool], uf: str, cargo: str, perfil: str = "padrao"
+) -> List[str]:
+    """sqcands acompanhados nessa corrida/perfil. Lista vazia se pool=None ou sem linha."""
     if pool is None:
         return []
     try:
         row = await pool.fetchrow(
-            "SELECT sqcands FROM selecao WHERE uf = $1 AND cargo = $2", uf, cargo
+            "SELECT sqcands FROM selecao WHERE uf = $1 AND cargo = $2 AND perfil = $3",
+            uf, cargo, perfil,
         )
         return list(row["sqcands"]) if row else []
     except Exception as e:
@@ -114,7 +117,8 @@ async def buscar_selecao(pool: Optional[asyncpg.Pool], uf: str, cargo: str) -> L
 
 
 async def salvar_selecao(
-    pool: Optional[asyncpg.Pool], uf: str, cargo: str, sqcands: List[str]
+    pool: Optional[asyncpg.Pool], uf: str, cargo: str, sqcands: List[str],
+    perfil: str = "padrao",
 ) -> bool:
     """
     Grava a selecao da corrida. Retorna False se a persistencia esta desativada,
@@ -125,12 +129,12 @@ async def salvar_selecao(
     try:
         await pool.execute(
             """
-            INSERT INTO selecao (uf, cargo, sqcands, atualizado_em)
-            VALUES ($1, $2, $3, NOW())
-            ON CONFLICT (uf, cargo)
+            INSERT INTO selecao (uf, cargo, perfil, sqcands, atualizado_em)
+            VALUES ($1, $2, $4, $3, NOW())
+            ON CONFLICT (uf, cargo, perfil)
             DO UPDATE SET sqcands = EXCLUDED.sqcands, atualizado_em = NOW()
             """,
-            uf, cargo, sqcands,
+            uf, cargo, sqcands, perfil,
         )
         return True
     except Exception as e:
@@ -143,9 +147,9 @@ async def carregar_todas_selecoes(pool: Optional[asyncpg.Pool]) -> List[dict]:
     if pool is None:
         return []
     try:
-        rows = await pool.fetch("SELECT uf, cargo, sqcands FROM selecao")
+        rows = await pool.fetch("SELECT uf, cargo, perfil, sqcands FROM selecao")
         return [
-            {"uf": r["uf"], "cargo": r["cargo"], "sqcands": list(r["sqcands"])}
+            {"uf": r["uf"], "cargo": r["cargo"], "perfil": r["perfil"], "sqcands": list(r["sqcands"])}
             for r in rows
         ]
     except Exception as e:

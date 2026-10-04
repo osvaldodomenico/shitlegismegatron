@@ -18,14 +18,21 @@ export function buscarCandidatos(uf, cargo) {
   return json(`/candidatos/${uf}/${cargo}`);
 }
 
-/** Selecao compartilhada atual: {sqcands, maximo}. */
-export function buscarSelecao(uf, cargo) {
-  return json(`/selecao/${uf}/${cargo}`);
+/** Query do perfil de selecao; o padrao nao vai na URL. */
+const qPerfil = (perfil) => (perfil && perfil !== "padrao" ? `perfil=${encodeURIComponent(perfil)}` : "");
+const comQuery = (caminho, ...partes) => {
+  const q = partes.filter(Boolean).join("&");
+  return q ? `${caminho}?${q}` : caminho;
+};
+
+/** Selecao compartilhada atual do perfil: {sqcands, maximo}. */
+export function buscarSelecao(uf, cargo, perfil) {
+  return json(comQuery(`/selecao/${uf}/${cargo}`, qPerfil(perfil)));
 }
 
-/** Grava a selecao. Lanca com a mensagem do servidor se passar do maximo. */
-export async function salvarSelecao(uf, cargo, sqcands) {
-  const r = await fetch(`${API_URL}/selecao/${uf}/${cargo}`, {
+/** Grava a selecao do perfil. Lanca com a mensagem do servidor se passar do maximo. */
+export async function salvarSelecao(uf, cargo, sqcands, perfil) {
+  const r = await fetch(`${API_URL}${comQuery(`/selecao/${uf}/${cargo}`, qPerfil(perfil))}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sqcands }),
@@ -44,9 +51,9 @@ export function buscarHistorico(uf, cargo, ultimas = 30) {
  * empurra quando o collector republica, e o collector so republica quando o
  * payload MUDA (diff-hash). Sobre fonte estatica isso nunca ocorre.
  */
-export function buscarResultado(uf, cargo, apenasSelecionados = false) {
-  const q = apenasSelecionados ? "?selecionados=true" : "";
-  return json(`/resultados/${uf}/${cargo}${q}`);
+export function buscarResultado(uf, cargo, apenasSelecionados = false, perfil) {
+  if (!apenasSelecionados) return json(`/resultados/${uf}/${cargo}`);
+  return json(comQuery(`/resultados/${uf}/${cargo}`, "selecionados=true", qPerfil(perfil)));
 }
 
 /** Corridas que o backend realmente coleta — fonte dos seletores. */

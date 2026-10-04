@@ -40,13 +40,20 @@ _consumer_task = None
 
 @app.websocket("/ws/{uf}/{cargo}")
 async def websocket_endpoint(
-    websocket: WebSocket, uf: str, cargo: str, selecionados: bool = False
+    websocket: WebSocket, uf: str, cargo: str, selecionados: bool = False,
+    perfil: str = sel.PERFIL_PADRAO,
 ):
     """
     `?selecionados=1` inscreve numa room paralela que recebe o payload ja
     recortado nos candidatos acompanhados — ver consumer.start_consumer.
+    `perfil` escolhe qual lista de acompanhados (padrao, geral, ...).
     """
-    room = f"{uf}:{cargo}:sel" if selecionados else f"{uf}:{cargo}"
+    try:
+        perfil = sel.validar_perfil(perfil)
+    except ValueError:
+        await websocket.close(code=1008)
+        return
+    room = sel.room(uf, cargo, perfil) if selecionados else f"{uf}:{cargo}"
     await manager.connect(websocket, room)
     try:
         while True:
@@ -62,7 +69,7 @@ async def startup():
     # Reidrata o cache de selecao: sem isso, um restart da API faria todo mundo
     # perder o filtro ate alguem regravar a escolha.
     for linha in await _db.carregar_todas_selecoes(pool):
-        sel.set_cache(linha["uf"], linha["cargo"], linha["sqcands"])
+        sel.set_cache(linha["uf"], linha["cargo"], linha["sqcands"], linha.get("perfil") or sel.PERFIL_PADRAO)
     _consumer_task = asyncio.create_task(start_consumer(manager, pool))
     print("[api] Startup completo.")
 

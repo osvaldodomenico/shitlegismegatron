@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
 import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes } from "./lib/tse";
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
+import { SeletorCandidatos } from "./components/SeletorCandidatos";
+import { IconPlus } from "./components/icons";
 
 /**
  * Painel de telao (1920x1080), da esquerda para a direita:
@@ -12,8 +14,10 @@ import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
  *      proporcional; `destaque` (numero de urna) e opcional e, quando existe,
  *      entra na lista mesmo fora do top.
  *
- * Nada e clicavel — a tela fica aberta num monitor e se atualiza sozinha pelo
- * WebSocket.
+ * `perfil` escolhe qual lista de acompanhados (padrao = a da tela principal;
+ * "geral" = a do /apuracaogeral, independente). Com `editavel`, cada faixa
+ * ganha o botao "Escolher" que abre o seletor e grava nesse perfil — e so
+ * nesse perfil.
  */
 
 const MAX_FAIXA = 3;    // linhas por faixa na coluna 1
@@ -102,7 +106,7 @@ function Vazio({ connected, texto = "Aguardando o primeiro boletim do TSE" }) {
 
 /* ------------------------------------- faixas da coluna 1 (pres/sen/gov) */
 
-function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros }) {
+function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolher }) {
   const todos = [...lerCandidatos(data)].sort((a, b) => num(b.vap) - num(a.vap));
   const lista = todos.slice(0, MAX_FAIXA);
   // "outros" so faz sentido sobre a corrida inteira, nao sobre uma selecao.
@@ -118,7 +122,16 @@ function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros }) {
       <header>
         <Titulo titulo={titulo} lugar={lugar} data={data} tamanho="text-2xl" pct="text-3xl" />
         <Secoes data={data} />
-        <p className="mt-1.5 text-xs uppercase tracking-wider text-faint">{origem}{outros}</p>
+        <p className="mt-1.5 flex items-center justify-between text-xs uppercase tracking-wider text-faint">
+          <span>{origem}{outros}</span>
+          {aoEscolher && (
+            <button onClick={aoEscolher}
+              className="flex h-7 cursor-pointer items-center gap-1 rounded-md border border-line px-2 text-xs font-medium normal-case tracking-normal text-subtle transition-colors duration-150 hover:border-primaryLit hover:text-muted">
+              <IconPlus className="h-3.5 w-3.5" />
+              {temSelecao ? "Alterar" : "Escolher"}
+            </button>
+          )}
+        </p>
       </header>
       {lista.length === 0 ? (
         <Vazio connected={connected} />
@@ -186,23 +199,65 @@ function ColunaRanking({ cfg, data, connected }) {
 /* ------------------------------------------------------------------ dados */
 
 /** Socket + primeira pintura via REST (o socket so empurra quando o TSE muda). */
-function useCorrida(uf, cargo, selecionados = false) {
-  const sock = useElectionSocket(uf, cargo, { selecionados });
-  const [temSelecao, setTemSelecao] = useState(false);
-  useEffect(() => {
-    api.buscarResultado(uf, cargo, selecionados).then(sock.setData).catch(() => {});
+function useCorrida(uf, cargo, selecionados = false, perfil = "padrao") {
+  const sock = useElectionSocket(uf, cargo, { selecionados, perfil });
+  const [selecao, setSelecao] = useState([]);
+  const [maximo, setMaximo] = useState(50);
+  const recarregar = useCallback(() => {
+    api.buscarResultado(uf, cargo, selecionados, perfil).then(sock.setData).catch(() => {});
     if (selecionados) {
-      api.buscarSelecao(uf, cargo).then((s) => setTemSelecao((s.sqcands || []).length > 0)).catch(() => {});
+      api.buscarSelecao(uf, cargo, perfil)
+        .then((s) => { setSelecao(s.sqcands || []); setMaximo(s.maximo || 50); })
+        .catch(() => {});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  return { ...sock, temSelecao };
+  }, [uf, cargo, selecionados, perfil]);
+  useEffect(() => { recarregar(); }, [recarregar]);
+  return { ...sock, uf, cargo, selecao, maximo, temSelecao: selecao.length > 0, recarregar };
 }
 
-export function Painel() {
-  const pres = useCorrida("br", "presidente", true);
-  const sen = useCorrida("sp", "senador", true);
-  const gov = useCorrida("sp", "governador", true);
+/** Estado do seletor de candidatos (so no modo editavel). */
+function useSeletor(perfil) {
+  const [alvo, setAlvo] = useState(null);        // corrida sendo editada
+  const [candidatos, setCandidatos] = useState([]);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState("");
+
+  const abrir = useCallback(async (corrida) => {
+    setErro("");
+    setAlvo(corrida);
+    try {
+      const r = await api.buscarCandidatos(corrida.uf, corrida.cargo);
+      setCandidatos(r.candidatos || []);
+    } catch {
+      setCandidatos([]);
+      setErro("Não foi possível carregar a lista de candidatos desta corrida.");
+    }
+  }, []);
+
+  async function confirmar(sqcands) {
+    if (!alvo) return;
+    setSalvando(true);
+    setErro("");
+    try {
+      await api.salvarSelecao(alvo.uf, alvo.cargo, sqcands, perfil);
+      alvo.recarregar();     // o socket so empurra no proximo boletim; a tela nao pode esperar
+      setAlvo(null);
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return { alvo, candidatos, salvando, erro, abrir, confirmar, fechar: () => setAlvo(null) };
+}
+
+export function Painel({ perfil = "padrao", editavel = false }) {
+  const pres = useCorrida("br", "presidente", true, perfil);
+  const sen = useCorrida("sp", "senador", true, perfil);
+  const gov = useCorrida("sp", "governador", true, perfil);
+  const seletor = useSeletor(perfil);
   // RANKINGS e constante de modulo: o numero de hooks nao varia entre renders.
   const rankings = RANKINGS.map((cfg) => useCorrida("sp", cfg.cargo));
 
@@ -216,15 +271,31 @@ export function Painel() {
       <main className="grid min-h-0 flex-1 divide-x divide-line"
         style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}>
         <div className="grid min-h-0 grid-rows-3 divide-y divide-line">
-          <Faixa titulo="Presidente" lugar="Brasil" data={pres.data} connected={pres.connected} temSelecao={pres.temSelecao} comOutros />
-          <Faixa titulo="Senador" lugar="São Paulo" data={sen.data} connected={sen.connected} temSelecao={sen.temSelecao} />
-          <Faixa titulo="Governador" lugar="São Paulo" data={gov.data} connected={gov.connected} temSelecao={gov.temSelecao} />
+          <Faixa titulo="Presidente" lugar="Brasil" data={pres.data} connected={pres.connected} temSelecao={pres.temSelecao} comOutros
+            aoEscolher={editavel ? () => seletor.abrir(pres) : undefined} />
+          <Faixa titulo="Senador" lugar="São Paulo" data={sen.data} connected={sen.connected} temSelecao={sen.temSelecao}
+            aoEscolher={editavel ? () => seletor.abrir(sen) : undefined} />
+          <Faixa titulo="Governador" lugar="São Paulo" data={gov.data} connected={gov.connected} temSelecao={gov.temSelecao}
+            aoEscolher={editavel ? () => seletor.abrir(gov) : undefined} />
         </div>
 
         {RANKINGS.map((cfg, i) => (
           <ColunaRanking key={cfg.cargo} cfg={cfg} data={rankings[i].data} connected={rankings[i].connected} />
         ))}
       </main>
+
+      {editavel && (
+        <SeletorCandidatos
+          aberto={seletor.alvo !== null}
+          aoFechar={seletor.fechar}
+          candidatos={seletor.candidatos}
+          selecionados={seletor.alvo?.selecao || []}
+          maximo={seletor.alvo?.maximo || 50}
+          aoConfirmar={seletor.confirmar}
+          salvando={seletor.salvando}
+          erro={seletor.erro}
+        />
+      )}
     </div>
   );
 }

@@ -12,7 +12,7 @@ const BACKOFF_DELAYS = [2000, 4000, 8000, 16000, 30000];
  * em deputado federal).
  */
 export function useElectionSocket(uf, cargo, opcoes = {}) {
-  const { selecionados = false } = opcoes;
+  const { selecionados = false, perfil = "padrao" } = opcoes;
   const [data, setData] = useState(null);
   const [connected, setConnected] = useState(false);
   const wsRef = useRef(null);
@@ -20,7 +20,9 @@ export function useElectionSocket(uf, cargo, opcoes = {}) {
   const timerRef = useRef(null);
 
   const connect = useCallback(() => {
-    const sufixo = selecionados ? "?selecionados=1" : "";
+    const sufixo = selecionados
+      ? `?selecionados=1${perfil && perfil !== "padrao" ? `&perfil=${encodeURIComponent(perfil)}` : ""}`
+      : "";
     const ws = new WebSocket(`${WS_URL}/ws/${uf}/${cargo}${sufixo}`);
     wsRef.current = ws;
 
@@ -41,7 +43,7 @@ export function useElectionSocket(uf, cargo, opcoes = {}) {
     };
 
     ws.onerror = () => ws.close();
-  }, [uf, cargo, selecionados]);
+  }, [uf, cargo, selecionados, perfil]);
 
   useEffect(() => {
     connect();

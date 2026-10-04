@@ -72,3 +72,28 @@ def test_resumir_candidatos_descarta_campos_pesados():
     r = selecao.resumir_candidatos(_payload())
     assert len(r) == 3
     assert set(r[0]) == {"sqcand", "nm", "cc", "n"}
+
+
+def test_perfis_sao_independentes():
+    """/apuracaogeral (perfil geral) nao pode enxergar nem mexer na lista do painel."""
+    selecao.limpar_cache()
+    selecao.set_cache("sp", "dep_federal", ["A1"])
+    selecao.set_cache("sp", "dep_federal", ["B2", "C3"], perfil="geral")
+    assert selecao.get("sp", "dep_federal") == ["A1"]
+    assert selecao.get("sp", "dep_federal", "geral") == ["B2", "C3"]
+    assert selecao.get("sp", "dep_federal", "outro") == []
+    assert sorted(selecao.perfis_com_selecao("sp", "dep_federal")) == [("geral", ["B2", "C3"]), ("padrao", ["A1"])]
+
+
+def test_room_do_perfil_padrao_mantem_o_nome_antigo():
+    assert selecao.room("sp", "dep_federal") == "sp:dep_federal:sel"
+    assert selecao.room("sp", "dep_federal", "geral") == "sp:dep_federal:sel:geral"
+
+
+def test_validar_perfil_recusa_lixo():
+    assert selecao.validar_perfil("") == "padrao"
+    assert selecao.validar_perfil("Geral") == "geral"
+    with pytest.raises(ValueError):
+        selecao.validar_perfil("a b")
+    with pytest.raises(ValueError):
+        selecao.validar_perfil("x" * 33)
