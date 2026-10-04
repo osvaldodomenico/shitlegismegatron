@@ -1,5 +1,5 @@
 """
-Rotas da selecao compartilhada de candidatos (maximo 5 por corrida).
+Rotas da selecao compartilhada de candidatos (limite em selecao.MAX_SELECIONADOS).
 
 /candidatos  -> lista enxuta para montar o seletor (1429 nomes sem os campos
                 pesados: ~70 KB em vez de ~240 KB)

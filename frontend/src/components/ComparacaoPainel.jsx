@@ -36,7 +36,7 @@ function Vazio({ aoAbrirSeletor, cargoNome }) {
       <IconUsers className="mx-auto h-10 w-10 text-faint" />
       <h3 className="mt-3 text-base font-semibold text-muted">Nenhum candidato acompanhado</h3>
       <p className="mx-auto mt-1 max-w-sm text-sm text-subtle">
-        Escolha até 5 candidatos de {cargoNome} para comparar votos, posição na legenda
+        Escolha os candidatos de {cargoNome} para comparar votos, posição na legenda
         e distância da linha de corte.
       </p>
       <button

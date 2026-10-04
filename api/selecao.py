@@ -1,5 +1,5 @@
 """
-Selecao compartilhada de candidatos a acompanhar (no maximo 5 por corrida).
+Selecao compartilhada de candidatos a acompanhar (limite por MAX_SELECIONADOS).
 
 Motivo de existir: o payload de deputado federal de SP traz 1429 candidatos e
 ~240 KB, e a resposta da API leva ~1,6s. Reenviar isso a cada ciclo para cada
@@ -14,9 +14,12 @@ e a posicao dentro do arquivo e pode mudar entre publicacoes, enquanto
 A selecao e compartilhada (todos veem a mesma), entao cabe cache em memoria:
 o Postgres e a fonte da verdade e o cache evita um SELECT por broadcast.
 """
+import os
 from typing import Dict, List, Sequence
 
-MAX_SELECIONADOS = 5
+# Era 5 (cabia no painel). Em 04/10 o Domenico pediu para tirar a trava: o
+# limite vira so uma protecao contra payload absurdo, configuravel por env.
+MAX_SELECIONADOS = int(os.environ.get("MAX_SELECIONADOS", "50"))
 
 # chave "uf:cargo" -> lista de sqcand, na ordem escolhida pelo usuario
 _cache: Dict[str, List[str]] = {}
