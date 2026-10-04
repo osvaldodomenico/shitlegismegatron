@@ -1,4 +1,4 @@
-import { num } from "../lib/tse";
+import { num, eleitosMatematicos } from "../lib/tse";
 import { CandidatoCard } from "./CandidatoCard";
 import { IconUsers, IconPlus } from "./icons";
 
@@ -52,7 +52,7 @@ function Vazio({ aoAbrirSeletor, cargoNome }) {
 
 export function ComparacaoPainel({
   candidatos, indicadores, cargoNome, aoAbrirSeletor, aoRemover, carregando, maximo = 5,
-  proporcional = true,
+  proporcional = true, data = null,
 }) {
   if (carregando) {
     return (
@@ -70,6 +70,7 @@ export function ComparacaoPainel({
 
   const lider = Math.max(...candidatos.map((c) => num(c.vap)), 1);
   const podeAdicionar = candidatos.length < maximo;
+  const matematicos = proporcional ? new Set() : eleitosMatematicos(data, data?.v);
 
   return (
     <section aria-label="Comparativo dos candidatos acompanhados">
@@ -98,6 +99,7 @@ export function ComparacaoPainel({
             proporcao={(num(c.vap) / lider) * 100}
             aoRemover={aoRemover}
             proporcional={proporcional}
+            projecao={matematicos.has(String(c.sqcand))}
           />
         ))}
       </ol>

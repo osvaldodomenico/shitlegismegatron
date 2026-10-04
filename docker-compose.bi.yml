@@ -129,7 +129,10 @@ services:
       MUN_UF: ${MUN_UF:-sp}
       MUN_CARGOS: ${MUN_CARGOS:-governador,senador,dep_federal,dep_estadual}
       MUN_INTERVAL_SECONDS: ${MUN_INTERVAL_SECONDS:-300}
-      MUN_CONCURRENCY: ${MUN_CONCURRENCY:-6}
+      MUN_CONCURRENCY: ${MUN_CONCURRENCY:-8}
+      # municipio = 645 arquivos/cargo; zona = 779 (zona x cidade). Juntos,
+      # ~5.700 arquivos por ciclo — a maioria volta 304 depois do primeiro.
+      MUN_NIVEIS: ${MUN_NIVEIS:-municipio,zona}
     depends_on:
       redis:
         condition: service_healthy

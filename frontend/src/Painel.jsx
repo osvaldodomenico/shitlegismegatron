@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes, votosDoPartido } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes, votosDoPartido, eleitosMatematicos } from "./lib/tse";
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 import { SeletorCandidatos } from "./components/SeletorCandidatos";
@@ -64,7 +64,7 @@ function Titulo({ titulo, lugar, data, tamanho = "text-3xl", pct = "text-4xl" })
 
 /* ------------------------------------------ linha compacta (meia coluna e ranking) */
 
-function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartido }) {
+function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartido, projecao = false }) {
   return (
     <li className={`flex items-center gap-3 rounded-xl border px-3 py-1.5 ${
       destaque ? "border-primaryLit bg-primary/20" : "border-line bg-surface"}`}>
@@ -80,7 +80,7 @@ function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartid
             <span className="truncate">{cand.nmu || cand.nm}</span>
             <span className="num shrink-0 rounded bg-elevated px-1.5 py-0.5 font-mono text-sm font-bold text-muted">{cand.n}</span>
             {mostrarPartido && <span className="shrink-0 text-sm font-semibold uppercase text-subtle">{partido(cand)}</span>}
-            <Selo cand={cand} tamanho="xs" />
+            <Selo cand={cand} tamanho="xs" projecao={projecao} />
           </p>
           <p className="num shrink-0 font-mono text-lg font-bold text-muted">
             {fmtPct(cand.pvap)}<span className="text-xs font-normal text-subtle">%</span>
@@ -111,6 +111,9 @@ function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolh
   const lista = todos.slice(0, MAX_FAIXA);
   // "outros" so faz sentido sobre a corrida inteira, nao sobre uma selecao.
   const resto = comOutros && !temSelecao ? todos.slice(MAX_FAIXA) : [];
+  // Projecao matematica sobre o que o payload traz (com selecao, so os
+  // acompanhados contra o total apurado — conservadora).
+  const matematicos = eleitosMatematicos(data, data?.v);
   const lider = Math.max(...lista.map((c) => num(c.vap)), 1);
   const origem = temSelecao ? "Acompanhados" : `${MAX_FAIXA} mais votados`;
   const outros = resto.length
@@ -139,6 +142,7 @@ function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros, aoEscolh
         <ol className={`mt-1.5 flex flex-col gap-1.5 ${solto ? "" : "min-h-0 flex-1"}`}>
           {lista.map((c) => (
             <LinhaCompacta key={c.sqcand || c.seq} cand={c} mostrarPartido
+              projecao={matematicos.has(String(c.sqcand))}
               proporcao={(num(c.vap) / lider) * 100}
               foto={c.foto || urlFoto(data?.cdabr || "sp", data?.ele, c.sqcand)} />
           ))}

@@ -38,11 +38,19 @@ const TAM = {
  * trofeu; 2o turno = laranja com setas; suplente/nao eleito = neutro. Nada
  * enquanto o TSE nao preencher.
  */
-export function Selo({ cand, tamanho = "sm" }) {
+export function Selo({ cand, tamanho = "sm", projecao = false }) {
   const { tipo, texto } = classificarSituacao(cand);
-  if (!tipo) return null;
   const t = TAM[tamanho] || TAM.sm;
   const base = `flex shrink-0 items-center gap-1 rounded font-bold uppercase tracking-wider ${t.selo}`;
+  // Projecao matematica (eleitosMatematicos): vale ate o TSE publicar `st`.
+  if (!tipo && projecao) {
+    return (
+      <span className={`${base} bg-success/25 text-successLit`} title="Projeção matemática: o adversário não alcança mais. O TSE ainda não publicou a situação.">
+        <IconTrophy className={t.icone} />Eleito<span className="font-normal normal-case tracking-normal opacity-80">· matemático</span>
+      </span>
+    );
+  }
+  if (!tipo) return null;
   if (tipo === "eleito") {
     return <span className={`${base} bg-success/25 text-successLit`}><IconTrophy className={t.icone} />{texto}</span>;
   }

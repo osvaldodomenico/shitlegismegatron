@@ -163,3 +163,35 @@ export function votosDoPartido(data, sigla) {
     .reduce((t, c) => t + num(c.vap), 0);
   return { total: nominais, nominais, legenda: null, vagas: null, pct: pct(nominais), completo: false };
 }
+
+/**
+ * Eleitos MATEMATICAMENTE em corrida majoritaria, antes de o TSE marcar `st`.
+ * Mesma logica dos portais: estima os votos validos que ainda faltam
+ * proporcionalmente as secoes nao totalizadas (R = vv * (100/pst - 1)) e so
+ * declara quando o adversario nao alcanca mais.
+ *   - 1 vaga (presidente, governador): eleito no 1o turno quem ja tem mais de
+ *     metade dos validos PROJETADOS (vv + R) — ninguem mais chega a 50%.
+ *   - N vagas (senador, 2 em 2026): eleito quem supera o (N+1)o colocado
+ *     mesmo que TODO o resto dos votos va para ele.
+ * Devolve o conjunto de sqcand. Vazio quando pst = 0 ou pst = 100 (ai e o
+ * TSE quem fala).
+ */
+export function eleitosMatematicos(data, vagas = 1) {
+  const pst = num(data?.pst);
+  const vv = num(data?.vv);
+  const n = Math.max(1, Math.floor(num(vagas)) || 1);
+  if (pst <= 0 || pst >= 100 || vv <= 0) return new Set();
+  const restantes = vv * (100 / pst - 1);
+  const ordem = [...candidatos(data)].sort((a, b) => num(b.vap) - num(a.vap));
+  const eleitos = new Set();
+  if (n === 1) {
+    const lider = ordem[0];
+    if (lider && num(lider.vap) > (vv + restantes) / 2) eleitos.add(String(lider.sqcand));
+    return eleitos;
+  }
+  const proximo = num(ordem[n]?.vap || 0);
+  for (const c of ordem.slice(0, n)) {
+    if (num(c.vap) > proximo + restantes) eleitos.add(String(c.sqcand));
+  }
+  return eleitos;
+}

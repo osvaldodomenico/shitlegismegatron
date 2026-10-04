@@ -32,3 +32,9 @@ def test_achatar_publica_totais_por_partido():
     assert [p["sg"] for p in flat["partidos"]] == ["REPUBLICANOS", "PT"]
     # o resto do contrato plano continua igual
     assert flat["pst"] == "10,00" and flat["cand"][0]["cc"] == "REPUBLICANOS"
+
+
+def test_achatar_publica_vagas_em_v_e_total_de_votos_em_tv():
+    flat = achatar(_payload())
+    assert flat["v"] == "70"       # carg.nv — vagas da corrida (quociente = vv / v)
+    assert flat["tv"] == "1100"    # total de votos apurados

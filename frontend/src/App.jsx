@@ -186,6 +186,7 @@ export default function App() {
                 carregando={carregando}
                 maximo={maximo}
                 proporcional={proporcional}
+                data={data}
               />
             </div>
 

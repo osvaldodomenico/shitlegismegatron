@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal, votosDoPartido } from "../lib/tse";
+import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal, votosDoPartido, eleitosMatematicos } from "../lib/tse";
 
 const HOJE = "04/10/2026";
 
@@ -114,5 +114,33 @@ describe("votosDoPartido", () => {
 
   it("partido sem votos nao divide por zero", () => {
     expect(votosDoPartido({ vv: "0", cand: [] }, "X").pct).toBe(0);
+  });
+});
+
+describe("eleitosMatematicos", () => {
+  it("1 vaga: so com mais da metade dos validos projetados", () => {
+    // 80% apurado, vv 800 -> restam 200, projetado 1000: precisa de > 500
+    const d = { pst: "80,00", vv: "800", cand: [
+      { sqcand: "A", vap: "520" }, { sqcand: "B", vap: "280" },
+    ] };
+    expect([...eleitosMatematicos(d, 1)]).toEqual(["A"]);
+    d.cand[0].vap = "480";
+    expect(eleitosMatematicos(d, 1).size).toBe(0);
+  });
+
+  it("2 vagas (senador): eleito quem o 3o nao alcanca nem levando todo o resto", () => {
+    // 90% apurado, vv 900 -> restam 100
+    const d = { pst: "90,00", vv: "900", cand: [
+      { sqcand: "A", vap: "300" }, { sqcand: "B", vap: "260" }, { sqcand: "C", vap: "190" },
+    ] };
+    expect([...eleitosMatematicos(d, 2)]).toEqual(["A"]);      // B: 260 <= 190 + 100
+    d.cand[1].vap = "295";
+    expect([...eleitosMatematicos(d, 2)].sort()).toEqual(["A", "B"]);
+  });
+
+  it("sem apuracao ou com 100% nao projeta (ai e o TSE quem fala)", () => {
+    const d = { pst: "0,00", vv: "0", cand: [{ sqcand: "A", vap: "0" }] };
+    expect(eleitosMatematicos(d, 1).size).toBe(0);
+    expect(eleitosMatematicos({ ...d, pst: "100,00", vv: "10", cand: [{ sqcand: "A", vap: "10" }] }, 1).size).toBe(0);
   });
 });

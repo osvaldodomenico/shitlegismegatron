@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, urlFoto, horaAtualizacao } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, horaAtualizacao, eleitosMatematicos } from "./lib/tse";
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 
@@ -25,13 +25,13 @@ const POR_FAIXA = 5;
 const fmtPct = (v) => num(v).toFixed(2).replace(".", ",");
 const fmtInt = (v) => num(v).toLocaleString("pt-BR");
 
-function Card({ cand, proporcao, foto, proporcional }) {
+function Card({ cand, proporcao, foto, proporcional, projecao = false }) {
   const ind = proporcional ? cand.ind : null;
   return (
     <li className="flex min-w-0 flex-col rounded-2xl border border-line bg-surface p-3">
       <div className="flex items-start justify-between gap-2">
         <Foto src={foto} nome={cand.nm} tamanho="h-14 w-14" texto="text-base" />
-        <Selo cand={cand} tamanho="xs" />
+        <Selo cand={cand} tamanho="xs" projecao={projecao} />
       </div>
       <p className="mt-2.5 line-clamp-2 min-h-[2.25rem] text-base font-semibold leading-tight text-muted" title={cand.nm}>
         {cand.nmu || cand.nm}
@@ -65,6 +65,7 @@ function Faixa({ pleito, data, connected, temSelecao }) {
   const cands = todos.slice(0, POR_FAIXA);
   const lider = Math.max(...cands.map((c) => num(c.vap)), 1);
   const origem = temSelecao ? "Acompanhados" : "5 mais votados";
+  const matematicos = pleito.proporcional ? new Set() : eleitosMatematicos(data, data?.v);
 
   return (
     <section className="flex min-h-0 flex-col overflow-hidden" aria-label={`${pleito.titulo} · ${pleito.lugar}`}>
@@ -99,6 +100,7 @@ function Faixa({ pleito, data, connected, temSelecao }) {
         <ol className="mt-3 grid flex-1 grid-cols-5 gap-3">
           {cands.map((c) => (
             <Card key={c.sqcand || c.seq} cand={c} proporcional={pleito.proporcional}
+              projecao={matematicos.has(String(c.sqcand))}
               proporcao={(num(c.vap) / lider) * 100}
               foto={c.foto || urlFoto(data?.cdabr || pleito.uf, data?.ele, c.sqcand)} />
           ))}

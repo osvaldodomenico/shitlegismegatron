@@ -108,7 +108,11 @@ def achatar(payload: dict) -> dict:
     flat["e"] = _texto(e.get("e") or e.get("te"))
     flat["vv"] = _texto(v.get("vv"))
     flat["vnom"] = _texto(v.get("vnom"))
-    flat["v"] = _texto(v.get("tv"))
+    # `v` = numero de VAGAS (carg.nv): e o que apuracao.calcular divide os
+    # votos validos para obter o quociente eleitoral. Ate 04/10 19h vinha
+    # `tv` (total de votos) aqui, e o quociente saia 1 e "vagas" 105777.
+    flat["tv"] = _texto(v.get("tv"))
+    flat["v"] = _texto((cargos[0] if cargos else {}).get("nv")) or _texto(v.get("tv"))
     flat["cand"] = _candidatos(cargos)
     flat["vagas_por_agremiacao"] = _vagas_por_agremiacao(cargos)
     flat["partidos"] = _partidos(cargos)
