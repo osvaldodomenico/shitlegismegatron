@@ -1,4 +1,5 @@
 import { num, legendaBoletim } from "../lib/tse";
+import { Final } from "./Telao";
 import { IconBallot } from "./icons";
 
 /**
@@ -72,7 +73,10 @@ export function Hero({ data, uf, ufNome, cargoNome, connected }) {
         {/* Barra de secoes totalizadas */}
         <div className="mt-7">
           <div className="mb-1.5 flex items-baseline justify-between">
-            <span className="text-xs uppercase tracking-wider text-faint">Seções totalizadas</span>
+            <span className="flex items-center gap-2 text-xs uppercase tracking-wider text-faint">
+              Seções totalizadas
+              <Final data={data} />
+            </span>
             <span className="num font-mono text-2xl font-bold text-muted">
               {pst.toFixed(2).replace(".", ",")}<span className="text-base text-subtle">%</span>
             </span>

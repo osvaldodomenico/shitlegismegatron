@@ -24,6 +24,9 @@ export const IconSun = (p) => (
 export const IconMoon = (p) => (
   <svg {...base} {...p}><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
 );
+export const IconRepeat = (p) => (
+  <svg {...base} {...p}><path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+);
 export const IconClose = (p) => (
   <svg {...base} {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>
 );

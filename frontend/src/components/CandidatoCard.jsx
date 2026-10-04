@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { num, partido, situacao } from "../lib/tse";
-import { IconClose, IconAlert, IconTrophy } from "./icons";
+import { num, partido } from "../lib/tse";
+import { IconClose, IconAlert } from "./icons";
+import { Selo } from "./Telao";
 
 /**
  * Card de um candidato acompanhado.
@@ -65,8 +66,6 @@ export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover, propo
   const ind = proporcional ? cand.ind : null;
   const votos = num(cand.vap);
   const pct = num(cand.pvap);
-  const st = situacao(cand);
-  const eleito = /eleito/i.test(st) && !/não|nao/i.test(st);
   const reprovadoNaBarreira = ind && ind.passou_barreira === false;
 
   return (
@@ -114,14 +113,7 @@ export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover, propo
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-        {eleito ? (
-          <span className="flex items-center gap-1 rounded bg-success/25 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-successLit">
-            <IconTrophy className="h-3.5 w-3.5" />
-            Eleito
-          </span>
-        ) : st && (
-          <span className="rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-subtle">{st}</span>
-        )}
+        <Selo cand={cand} tamanho="xs" />
         {ind && (
           <span className="flex items-center gap-1.5 rounded-lg border border-primaryLit/40 bg-primary/20 px-2.5 py-1 text-sm font-semibold text-primaryLit">
             <span className="num font-mono text-lg font-bold">{ind.posicao_agremiacao}º</span>

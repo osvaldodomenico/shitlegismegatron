@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, situacao, urlFoto, legendaBoletim, rankingDaLegenda } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes } from "./lib/tse";
 import * as api from "./lib/api";
-import { IconTrophy } from "./components/icons";
-import { Foto, CabecalhoTelao } from "./components/Telao";
+import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 
 /**
  * Painel de telao (1920x1080), da esquerda para a direita:
@@ -27,16 +26,6 @@ const RANKINGS = [
 
 const fmtPct = (v) => num(v).toFixed(2).replace(".", ",");
 const fmtInt = (v) => num(v).toLocaleString("pt-BR");
-const eEleito = (cand) => { const st = situacao(cand); return /eleito/i.test(st) && !/não|nao/i.test(st); };
-
-function Eleito({ className = "text-sm", icone = "h-4 w-4" }) {
-  return (
-    <span className={`flex shrink-0 items-center gap-1 rounded bg-success/25 px-2 py-0.5 font-bold uppercase tracking-wider text-successLit ${className}`}>
-      <IconTrophy className={icone} />
-      Eleito
-    </span>
-  );
-}
 
 function Secoes({ data }) {
   const pst = num(data?.pst);
@@ -58,8 +47,9 @@ function Secoes({ data }) {
 function Titulo({ titulo, lugar, data, tamanho = "text-3xl", pct = "text-4xl" }) {
   return (
     <div className="flex items-end justify-between gap-4">
-      <h2 className={`${tamanho} font-bold leading-none text-muted`}>
-        {titulo} <span className="text-primaryLit">· {lugar}</span>
+      <h2 className={`flex items-end gap-3 ${tamanho} font-bold leading-none text-muted`}>
+        <span>{titulo} <span className="text-primaryLit">· {lugar}</span></span>
+        <Final data={data} className="text-xs mb-0.5" />
       </h2>
       <span className={`num font-mono ${pct} font-bold leading-none text-muted`}>
         {fmtPct(num(data?.pst))}<span className="text-xl font-normal text-subtle">%</span>
@@ -71,8 +61,6 @@ function Titulo({ titulo, lugar, data, tamanho = "text-3xl", pct = "text-4xl" })
 /* ------------------------------------------ linha compacta (meia coluna e ranking) */
 
 function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartido }) {
-  const st = situacao(cand);
-  const eleito = eEleito(cand);
   return (
     <li className={`flex items-center gap-3 rounded-xl border px-3 py-1.5 ${
       destaque ? "border-primaryLit bg-primary/20" : "border-line bg-surface"}`}>
@@ -88,9 +76,7 @@ function LinhaCompacta({ cand, proporcao, foto, posicao, destaque, mostrarPartid
             <span className="truncate">{cand.nmu || cand.nm}</span>
             <span className="num shrink-0 rounded bg-elevated px-1.5 py-0.5 font-mono text-sm font-bold text-muted">{cand.n}</span>
             {mostrarPartido && <span className="shrink-0 text-sm font-semibold uppercase text-subtle">{partido(cand)}</span>}
-            {eleito ? <Eleito className="text-xs" icone="h-3.5 w-3.5" /> : (!posicao && st) && (
-              <span className="shrink-0 rounded bg-elevated px-1.5 py-0.5 text-xs font-medium text-subtle">{st}</span>
-            )}
+            <Selo cand={cand} tamanho="xs" />
           </p>
           <p className="num shrink-0 font-mono text-lg font-bold text-muted">
             {fmtPct(cand.pvap)}<span className="text-xs font-normal text-subtle">%</span>
@@ -152,9 +138,11 @@ function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros }) {
 /* ------------------------------------------------------ ranking por legenda */
 
 function ColunaRanking({ cfg, data, connected }) {
-  const { lista, total } = rankingDaLegenda(lerCandidatos(data), cfg.partido, cfg.destaque, cfg.n);
+  const { lista, total, todos } = rankingDaLegenda(lerCandidatos(data), cfg.partido, cfg.destaque, cfg.n);
   const lider = Math.max(...lista.map((c) => num(c.vap)), 1);
   const alvo = lista.find((c) => c.destaque);
+  // Assim que o TSE preencher `st`, o resumo da legenda substitui a contagem crua.
+  const resumo = resumoSituacoes(todos);
 
   return (
     <section className="flex min-h-0 flex-col px-6 py-5" aria-label={`${cfg.titulo} · São Paulo · ${cfg.partido}`}>
@@ -163,7 +151,13 @@ function ColunaRanking({ cfg, data, connected }) {
         <Secoes data={data} />
         <p className="mt-3 flex items-center gap-2 text-sm">
           <span className="rounded bg-elevated px-2 py-0.5 font-semibold uppercase text-muted">{cfg.partido}</span>
-          <span className="text-subtle">Ranking na legenda · {total} candidatos</span>
+          {resumo.length ? (
+            <span className="font-semibold text-successLit">
+              {resumo.map((r) => `${r.n} ${r.texto}`).join(" · ")}
+            </span>
+          ) : (
+            <span className="text-subtle">Ranking na legenda · {total} candidatos</span>
+          )}
           {alvo && (
             <span className="ml-auto rounded-lg border border-primaryLit/40 bg-primary/20 px-2 py-0.5 font-semibold text-primaryLit">
               {alvo.nmu || alvo.nm}: <span className="num font-mono font-bold">{alvo.posicao}º</span> de {total}

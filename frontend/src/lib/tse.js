@@ -60,7 +60,48 @@ export function legendaBoletim(data, hoje = new Date().toLocaleDateString("pt-BR
   const dia = dataAtualizacao(data);
   const quando = dia && dia !== hoje ? `${dia} às ${hora}` : `às ${hora}`;
   if (num(data?.pst) === 0) return `Aguardando o TSE iniciar a apuração · último boletim ${quando}`;
+  if (boletimFinal(data)) return `Totalização FINAL do TSE · boletim ${quando}`;
   return dia && dia !== hoje ? `Boletim do TSE de ${quando}` : `Dados do TSE, atualizados ${quando}`;
+}
+
+/** `tf` = "s" quando o TSE marca o boletim como totalizacao final. */
+export function boletimFinal(data) {
+  return String(data?.tf || "").toLowerCase() === "s";
+}
+
+const ORDEM_SITUACAO = { eleito: 0, segundo_turno: 1, suplente: 2, nao_eleito: 3, outro: 4 };
+
+/**
+ * Le a situacao publicada pelo TSE (`st`) e devolve um tipo estavel para a
+ * interface. Textos reais: "Eleito", "Eleito por QP", "Eleito por média",
+ * "2º turno", "Suplente", "Não eleito". Vazio enquanto nao esta definido.
+ */
+export function classificarSituacao(cand) {
+  const texto = situacao(cand).trim();
+  const t = texto.toLowerCase();
+  if (!t) return { tipo: "", texto: "" };
+  if (/2\s*[ºo°]?\s*turno/.test(t)) return { tipo: "segundo_turno", texto: "2º turno" };
+  if (/n[aã]o\s+eleit/.test(t)) return { tipo: "nao_eleito", texto };
+  if (/eleit/.test(t)) return { tipo: "eleito", texto };
+  if (/suplente/.test(t)) return { tipo: "suplente", texto };
+  return { tipo: "outro", texto };
+}
+
+/**
+ * Contagem por situacao, para o resumo da legenda ("3 eleitos por QP · 1 por
+ * média · 2 suplentes"). Lista vazia enquanto o TSE nao preencher nada.
+ */
+export function resumoSituacoes(cands) {
+  const contagem = new Map();
+  for (const c of cands || []) {
+    const { tipo, texto } = classificarSituacao(c);
+    if (!tipo) continue;
+    const chave = texto.toLowerCase();
+    const atual = contagem.get(chave) || { tipo, texto: chave, n: 0 };
+    atual.n += 1;
+    contagem.set(chave, atual);
+  }
+  return [...contagem.values()].sort((a, b) => ORDEM_SITUACAO[a.tipo] - ORDEM_SITUACAO[b.tipo] || b.n - a.n);
 }
 
 /** Foto oficial na CDN do TSE — mesmo esquema de api/apuracao.url_foto. */
@@ -98,5 +139,5 @@ export function rankingDaLegenda(cands, sigla, destaque, n = 10) {
     top.pop();
     top.push(alvo);
   }
-  return { lista: top, total: daLegenda.length };
+  return { lista: top, total: daLegenda.length, todos: daLegenda };
 }

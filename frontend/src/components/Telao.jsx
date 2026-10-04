@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { IconBallot } from "./icons";
+import { IconBallot, IconTrophy, IconRepeat } from "./icons";
+import { classificarSituacao, boletimFinal } from "../lib/tse";
 import { BotaoTema } from "./BotaoTema";
 
 /**
@@ -24,6 +25,44 @@ export function Foto({ src, nome, tamanho = "h-20 w-20", texto = "text-xl" }) {
   return (
     <img src={src} alt="" onError={() => setFalhou(true)}
       className={`${tamanho} shrink-0 rounded-xl object-cover`} />
+  );
+}
+
+const TAM = {
+  xs: { selo: "px-1.5 py-0.5 text-[11px]", icone: "h-3.5 w-3.5" },
+  sm: { selo: "px-2 py-0.5 text-sm", icone: "h-4 w-4" },
+};
+
+/**
+ * Situacao publicada pelo TSE, com peso visual por tipo: eleito = verde com
+ * trofeu; 2o turno = laranja com setas; suplente/nao eleito = neutro. Nada
+ * enquanto o TSE nao preencher.
+ */
+export function Selo({ cand, tamanho = "sm" }) {
+  const { tipo, texto } = classificarSituacao(cand);
+  if (!tipo) return null;
+  const t = TAM[tamanho] || TAM.sm;
+  const base = `flex shrink-0 items-center gap-1 rounded font-bold uppercase tracking-wider ${t.selo}`;
+  if (tipo === "eleito") {
+    return <span className={`${base} bg-success/25 text-successLit`}><IconTrophy className={t.icone} />{texto}</span>;
+  }
+  if (tipo === "segundo_turno") {
+    return <span className={`${base} bg-accent/15 text-accent`}><IconRepeat className={t.icone} />2º turno</span>;
+  }
+  return (
+    <span className={`shrink-0 rounded bg-elevated font-medium ${t.selo} ${tipo === "nao_eleito" ? "text-faint" : "text-subtle"}`}>
+      {texto}
+    </span>
+  );
+}
+
+/** Aviso de totalizacao final (`tf` = "s"). Nada antes disso. */
+export function Final({ data, className = "text-xs" }) {
+  if (!boletimFinal(data)) return null;
+  return (
+    <span className={`shrink-0 rounded bg-success/25 px-2 py-0.5 font-bold uppercase tracking-wider text-successLit ${className}`}>
+      Totalização final
+    </span>
   );
 }
 

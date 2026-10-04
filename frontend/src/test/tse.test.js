@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { legendaBoletim, urlFoto, rankingDaLegenda } from "../lib/tse";
+import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal } from "../lib/tse";
 
 const HOJE = "04/10/2026";
 
@@ -62,5 +62,37 @@ describe("rankingDaLegenda", () => {
   it("sem o destaque na corrida, devolve so o top-n", () => {
     const { lista } = rankingDaLegenda(cands, "REPUBLICANOS", "9999", 2);
     expect(lista.map((c) => c.n)).toEqual(["1010", "1022"]);
+  });
+});
+
+describe("situacao do TSE", () => {
+  it("classifica os textos reais do TSE", () => {
+    expect(classificarSituacao({ st: "Eleito" }).tipo).toBe("eleito");
+    expect(classificarSituacao({ st: "Eleito por QP" }).tipo).toBe("eleito");
+    expect(classificarSituacao({ st: "Eleito por média" }).tipo).toBe("eleito");
+    expect(classificarSituacao({ st: "Não eleito" }).tipo).toBe("nao_eleito");
+    expect(classificarSituacao({ st: "2º turno" })).toEqual({ tipo: "segundo_turno", texto: "2º turno" });
+    expect(classificarSituacao({ st: "2o Turno" }).tipo).toBe("segundo_turno");
+    expect(classificarSituacao({ st: "Suplente" }).tipo).toBe("suplente");
+    expect(classificarSituacao({ st: "" }).tipo).toBe("");
+    expect(classificarSituacao({ e: "n" }).tipo).toBe("");
+  });
+
+  it("resume a legenda com eleitos primeiro e vazio enquanto o TSE nao preenche", () => {
+    expect(resumoSituacoes([{ st: "" }, { st: "" }])).toEqual([]);
+    const r = resumoSituacoes([
+      { st: "Suplente" }, { st: "Eleito por QP" }, { st: "Eleito por média" },
+      { st: "Eleito por QP" }, { st: "Não eleito" }, { st: "Suplente" }, { st: "Eleito por QP" },
+    ]);
+    expect(r.map((x) => `${x.n} ${x.texto}`)).toEqual([
+      "3 eleito por qp", "1 eleito por média", "2 suplente", "1 não eleito",
+    ]);
+  });
+
+  it("boletim final muda o carimbo", () => {
+    expect(boletimFinal({ tf: "n" })).toBe(false);
+    expect(boletimFinal({ tf: "s" })).toBe(true);
+    expect(legendaBoletim({ dg: "04/10/2026", hg: "23:10:00", pst: "100,00", tf: "s" }, "04/10/2026"))
+      .toBe("Totalização FINAL do TSE · boletim às 23:10:00");
   });
 });

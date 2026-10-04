@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, situacao, urlFoto, horaAtualizacao } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, horaAtualizacao } from "./lib/tse";
 import * as api from "./lib/api";
-import { IconTrophy } from "./components/icons";
-import { Foto, CabecalhoTelao } from "./components/Telao";
+import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 
 /**
  * Dashboard vertical (1080x1920): os cinco pleitos de uma vez, uma faixa por
@@ -27,19 +26,12 @@ const fmtPct = (v) => num(v).toFixed(2).replace(".", ",");
 const fmtInt = (v) => num(v).toLocaleString("pt-BR");
 
 function Card({ cand, proporcao, foto, proporcional }) {
-  const st = situacao(cand);
-  const eleito = /eleito/i.test(st) && !/não|nao/i.test(st);
   const ind = proporcional ? cand.ind : null;
   return (
     <li className="flex min-w-0 flex-col rounded-2xl border border-line bg-surface p-3">
       <div className="flex items-start justify-between gap-2">
         <Foto src={foto} nome={cand.nm} tamanho="h-14 w-14" texto="text-base" />
-        {eleito && (
-          <span className="flex items-center gap-1 rounded-md bg-success/25 px-2 py-1 text-xs font-bold uppercase tracking-wider text-successLit">
-            <IconTrophy className="h-4 w-4" />
-            Eleito
-          </span>
-        )}
+        <Selo cand={cand} tamanho="xs" />
       </div>
       <p className="mt-2.5 line-clamp-2 min-h-[2.25rem] text-base font-semibold leading-tight text-muted" title={cand.nm}>
         {cand.nmu || cand.nm}
@@ -78,8 +70,9 @@ function Faixa({ pleito, data, connected, temSelecao }) {
     <section className="flex min-h-0 flex-col overflow-hidden" aria-label={`${pleito.titulo} · ${pleito.lugar}`}>
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold leading-none text-muted">
-            {pleito.titulo} <span className="text-primaryLit">· {pleito.lugar}</span>
+          <h2 className="flex items-end gap-3 text-2xl font-bold leading-none text-muted">
+            <span>{pleito.titulo} <span className="text-primaryLit">· {pleito.lugar}</span></span>
+            <Final data={data} />
           </h2>
           <p className="mt-1.5 text-xs uppercase tracking-wider text-faint">
             {origem}{hora && ` · boletim das ${hora}`}
