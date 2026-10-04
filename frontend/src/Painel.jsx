@@ -24,8 +24,8 @@ const MAX_FAIXA = 3;    // linhas por faixa na coluna 1
 
 // Rankings por legenda, um por coluna, na ordem da tela.
 const RANKINGS = [
-  { cargo: "dep_estadual", titulo: "Deputado Estadual", partido: "REPUBLICANOS", destaque: null,   n: 10 },
-  { cargo: "dep_federal",  titulo: "Deputado Federal",  partido: "REPUBLICANOS", destaque: "1055", n: 10 },
+  { cargo: "dep_estadual", titulo: "Deputado Estadual", partido: "REPUBLICANOS", destaque: null,   n: 8 },
+  { cargo: "dep_federal",  titulo: "Deputado Federal",  partido: "REPUBLICANOS", destaque: "1055", n: 8 },
 ];
 
 const fmtPct = (v) => num(v).toFixed(2).replace(".", ",");
