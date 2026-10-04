@@ -9,9 +9,9 @@ import { Foto, CabecalhoTelao } from "./components/Telao";
  * Dashboard vertical (1080x1920): os cinco pleitos de uma vez, uma faixa por
  * pleito e cinco cards por faixa.
  *
- * Majoritarias (presidente, senador, governador): os 5 mais votados.
- * Proporcionais (dep. federal/estadual): os acompanhados na tela principal;
- * sem acompanhados, os 5 mais votados — nunca uma faixa vazia no telao.
+ * Toda faixa mostra os acompanhados na tela principal; sem acompanhados,
+ * os 5 mais votados — nunca uma faixa vazia no telao. `proporcional` so
+ * decide se o chip de posicao na legenda aparece.
  */
 
 const PLEITOS = [
@@ -72,7 +72,7 @@ function Faixa({ pleito, data, connected, temSelecao }) {
   const todos = [...lerCandidatos(data)].sort((a, b) => num(b.vap) - num(a.vap));
   const cands = todos.slice(0, POR_FAIXA);
   const lider = Math.max(...cands.map((c) => num(c.vap)), 1);
-  const origem = pleito.proporcional && temSelecao ? "Acompanhados" : "5 mais votados";
+  const origem = temSelecao ? "Acompanhados" : "5 mais votados";
 
   return (
     <section className="flex min-h-0 flex-col overflow-hidden" aria-label={`${pleito.titulo} · ${pleito.lugar}`}>
@@ -117,15 +117,14 @@ function Faixa({ pleito, data, connected, temSelecao }) {
 
 /** Um pleito do dashboard: socket + primeira pintura + se ha acompanhados. */
 function usePleito(pleito) {
-  const sock = useElectionSocket(pleito.uf, pleito.cargo, { selecionados: pleito.proporcional });
+  // Room filtrada: com selecao vazia o servidor manda a corrida inteira.
+  const sock = useElectionSocket(pleito.uf, pleito.cargo, { selecionados: true });
   const [temSelecao, setTemSelecao] = useState(false);
   useEffect(() => {
-    api.buscarResultado(pleito.uf, pleito.cargo, pleito.proporcional).then(sock.setData).catch(() => {});
-    if (pleito.proporcional) {
-      api.buscarSelecao(pleito.uf, pleito.cargo)
-        .then((s) => setTemSelecao((s.sqcands || []).length > 0))
-        .catch(() => {});
-    }
+    api.buscarResultado(pleito.uf, pleito.cargo, true).then(sock.setData).catch(() => {});
+    api.buscarSelecao(pleito.uf, pleito.cargo)
+      .then((s) => setTemSelecao((s.sqcands || []).length > 0))
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return { ...sock, temSelecao };

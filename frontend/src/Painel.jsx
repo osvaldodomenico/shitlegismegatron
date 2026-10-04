@@ -7,9 +7,8 @@ import { Foto, CabecalhoTelao } from "./components/Telao";
 
 /**
  * Painel de telao (1920x1080), da esquerda para a direita:
- *   1. Presidente, Senador e Governador empilhados — presidente com os 3 mais
- *      votados; senador e governador com os acompanhados da tela principal
- *      (sem selecao, os 3 mais votados).
+ *   1. Presidente, Senador e Governador empilhados — sempre os acompanhados
+ *      da tela principal (sem selecao, os 3 mais votados).
  *   2+. Uma coluna por RANKING: os mais votados de UMA legenda num cargo
  *      proporcional; `destaque` (numero de urna) e opcional e, quando existe,
  *      entra na lista mesmo fora do top.
@@ -120,7 +119,8 @@ function Vazio({ connected, texto = "Aguardando o primeiro boletim do TSE" }) {
 function Faixa({ titulo, lugar, data, connected, temSelecao, comOutros }) {
   const todos = [...lerCandidatos(data)].sort((a, b) => num(b.vap) - num(a.vap));
   const lista = todos.slice(0, MAX_FAIXA);
-  const resto = comOutros ? todos.slice(MAX_FAIXA) : [];
+  // "outros" so faz sentido sobre a corrida inteira, nao sobre uma selecao.
+  const resto = comOutros && !temSelecao ? todos.slice(MAX_FAIXA) : [];
   const lider = Math.max(...lista.map((c) => num(c.vap)), 1);
   const origem = temSelecao ? "Acompanhados" : `${MAX_FAIXA} mais votados`;
   const outros = resto.length
@@ -206,7 +206,7 @@ function useCorrida(uf, cargo, selecionados = false) {
 }
 
 export function Painel() {
-  const pres = useCorrida("br", "presidente");
+  const pres = useCorrida("br", "presidente", true);
   const sen = useCorrida("sp", "senador", true);
   const gov = useCorrida("sp", "governador", true);
   // RANKINGS e constante de modulo: o numero de hooks nao varia entre renders.
@@ -222,7 +222,7 @@ export function Painel() {
       <main className="grid min-h-0 flex-1 divide-x divide-line"
         style={{ gridTemplateColumns: `repeat(${colunas}, minmax(0, 1fr))` }}>
         <div className="grid min-h-0 grid-rows-3 divide-y divide-line">
-          <Faixa titulo="Presidente" lugar="Brasil" data={pres.data} connected={pres.connected} comOutros />
+          <Faixa titulo="Presidente" lugar="Brasil" data={pres.data} connected={pres.connected} temSelecao={pres.temSelecao} comOutros />
           <Faixa titulo="Senador" lugar="São Paulo" data={sen.data} connected={sen.connected} temSelecao={sen.temSelecao} />
           <Faixa titulo="Governador" lugar="São Paulo" data={gov.data} connected={gov.connected} temSelecao={gov.temSelecao} />
         </div>
