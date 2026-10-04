@@ -139,6 +139,9 @@ export default function App() {
   const ufNome = corridas.find((c) => c.uf === uf)?.uf_nome || UF_NOMES[uf] || uf.toUpperCase();
   const cargoNome = corridas.find((c) => c.uf === uf && c.cargo === cargo)?.cargo_nome || CARGO_LABELS[cargo] || cargo;
   const semDados = !carregando && cands.length === 0 && !filtrando;
+  // Quociente, vagas por legenda e linha de corte so existem em eleicao
+  // proporcional; em majoritaria o calculo sai "1 vaga, quociente 1" e confunde.
+  const proporcional = cargo === "dep_federal" || cargo === "dep_estadual";
 
   return (
     <div className="min-h-dvh bg-bg">
@@ -182,6 +185,7 @@ export default function App() {
                 aoRemover={removerCandidato}
                 carregando={carregando}
                 maximo={maximo}
+                proporcional={proporcional}
               />
             </div>
 

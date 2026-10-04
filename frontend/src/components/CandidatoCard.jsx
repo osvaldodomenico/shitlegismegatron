@@ -60,8 +60,9 @@ function LinhaDeCorte({ ind }) {
   );
 }
 
-export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover }) {
-  const ind = cand.ind;
+export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover, proporcional = true }) {
+  // Em majoritaria os indicadores de legenda nao se aplicam: nem chip, nem corte.
+  const ind = proporcional ? cand.ind : null;
   const votos = num(cand.vap);
   const pct = num(cand.pvap);
   const st = situacao(cand);
@@ -132,9 +133,11 @@ export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover }) {
         )}
       </div>
 
-      <div className="mt-1.5">
-        <LinhaDeCorte ind={ind} />
-      </div>
+      {proporcional && (
+        <div className="mt-1.5">
+          <LinhaDeCorte ind={ind} />
+        </div>
+      )}
 
       {reprovadoNaBarreira && (
         <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-accent/10 px-2 py-1.5 text-xs text-accent">

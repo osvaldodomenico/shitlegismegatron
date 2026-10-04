@@ -52,6 +52,7 @@ function Vazio({ aoAbrirSeletor, cargoNome }) {
 
 export function ComparacaoPainel({
   candidatos, indicadores, cargoNome, aoAbrirSeletor, aoRemover, carregando, maximo = 5,
+  proporcional = true,
 }) {
   if (carregando) {
     return (
@@ -85,7 +86,7 @@ export function ComparacaoPainel({
         </button>
       </header>
 
-      <FaixaIndicadores ind={indicadores} />
+      {proporcional && <FaixaIndicadores ind={indicadores} />}
 
       <ol className="space-y-2.5">
         {candidatos.map((c, i) => (
@@ -96,6 +97,7 @@ export function ComparacaoPainel({
             corTexto={TEXTO[i % 5]}
             proporcao={(num(c.vap) / lider) * 100}
             aoRemover={aoRemover}
+            proporcional={proporcional}
           />
         ))}
       </ol>
@@ -112,7 +114,7 @@ export function ComparacaoPainel({
 
       <p className="mt-3 text-xs text-faint">
         Barras proporcionais ao primeiro colocado da seleção. Percentual sobre os votos válidos.
-        A linha de corte usa a situação publicada pelo TSE para cada agremiação.
+        {proporcional && " A linha de corte usa a situação publicada pelo TSE para cada agremiação."}
       </p>
     </section>
   );
