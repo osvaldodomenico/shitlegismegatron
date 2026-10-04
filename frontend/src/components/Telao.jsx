@@ -43,8 +43,8 @@ export function AoVivo({ ok, className = "text-lg" }) {
   return (
     <span role="status" aria-live="polite"
       className={`flex items-center gap-2 rounded-full border px-4 py-2 font-medium ${className} ${
-        ok ? "border-accent/40 bg-accent/10 text-accent" : "border-line bg-elevated text-subtle"}`}>
-      <span className={`h-3 w-3 rounded-full ${ok ? "bg-accent animate-pulseSoft" : "bg-faint"}`} aria-hidden="true" />
+        ok ? "border-successLit/40 bg-success/20 text-successLit" : "border-line bg-elevated text-subtle"}`}>
+      <span className={`h-3 w-3 rounded-full ${ok ? "bg-successLit animate-pulseSoft" : "bg-faint"}`} aria-hidden="true" />
       {ok ? "Ao vivo" : "Reconectando…"}
     </span>
   );

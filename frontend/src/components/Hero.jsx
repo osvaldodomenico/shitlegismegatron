@@ -57,12 +57,12 @@ export function Hero({ data, uf, ufNome, cargoNome, connected }) {
             aria-live="polite"
             className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium ${
               connected
-                ? "border-accent/40 bg-accent/10 text-accent"
+                ? "border-successLit/40 bg-success/20 text-successLit"
                 : "border-line bg-elevated text-subtle"
             }`}
           >
             <span
-              className={`h-2 w-2 rounded-full ${connected ? "bg-accent animate-pulseSoft" : "bg-faint"}`}
+              className={`h-2 w-2 rounded-full ${connected ? "bg-successLit animate-pulseSoft" : "bg-faint"}`}
               aria-hidden="true"
             />
             {connected ? "Ao vivo" : "Reconectando…"}
