@@ -31,7 +31,7 @@ export function CandidatosTable({ candidatos = [] }) {
             return (
               <tr key={c.sqcand} className="border-t border-gray-800 hover:bg-gray-900/30">
                 <td className="px-4 py-3">
-                  <span className="font-medium">{c.nm}</span>
+                  <span className="font-medium">{c.nmu || c.nm}</span>
                   <span className="text-gray-500 text-xs ml-2 line-clamp-1">
                     {partido(c)} · nº {c.n}
                   </span>

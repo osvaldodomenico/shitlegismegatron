@@ -92,7 +92,8 @@ export default function App() {
   }, [uf, cargo, filtrando, setData]);
 
   useEffect(() => {
-    api.buscarHistorico(uf, cargo, 30)
+    // 1 snapshot/min: 360 pontos cobrem a noite inteira de apuracao.
+    api.buscarHistorico(uf, cargo, 360)
       .then((d) => setHistorico(Array.isArray(d) ? d : []))
       .catch(() => setHistorico([]));
   }, [uf, cargo, hora]);
@@ -156,7 +157,6 @@ export default function App() {
         ufNome={ufNome}
         cargoNome={cargoNome}
         connected={connected}
-        hora={hora}
       />
 
       <main className="mx-auto max-w-6xl px-4 py-8">

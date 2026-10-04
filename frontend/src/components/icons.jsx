@@ -15,6 +15,9 @@ export const IconBallot = (p) => (
 export const IconSearch = (p) => (
   <svg {...base} {...p}><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>
 );
+export const IconTrophy = (p) => (
+  <svg {...base} {...p}><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4v2a3 3 0 0 0 3 3"/><path d="M17 6h3v2a3 3 0 0 1-3 3"/></svg>
+);
 export const IconClose = (p) => (
   <svg {...base} {...p}><path d="M18 6 6 18M6 6l12 12"/></svg>
 );

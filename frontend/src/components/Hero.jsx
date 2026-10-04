@@ -1,4 +1,4 @@
-import { num } from "../lib/tse";
+import { num, legendaBoletim } from "../lib/tse";
 import { IconBallot } from "./icons";
 
 /**
@@ -23,7 +23,7 @@ function Metrica({ rotulo, valor, sufixo, destaque }) {
 
 const inteiro = (v) => num(v).toLocaleString("pt-BR");
 
-export function Hero({ data, uf, ufNome, cargoNome, connected, hora }) {
+export function Hero({ data, uf, ufNome, cargoNome, connected }) {
   const pst = num(data?.pst);
 
   return (
@@ -47,7 +47,7 @@ export function Hero({ data, uf, ufNome, cargoNome, connected, hora }) {
               </span>
             </h1>
             <p className="mt-1 text-sm text-faint">
-              {hora ? `Dados do TSE, atualizados às ${hora}` : "Aguardando primeiro boletim"}
+              {legendaBoletim(data)}
             </p>
           </div>
 

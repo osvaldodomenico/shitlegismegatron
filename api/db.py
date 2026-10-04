@@ -6,7 +6,9 @@ e salvar_snapshot/buscar_historico viram no-op silencioso.
 """
 import json
 import os
+from datetime import datetime
 from typing import Optional, List
+from zoneinfo import ZoneInfo
 
 import asyncpg
 
@@ -62,8 +64,19 @@ async def salvar_snapshot(pool: Optional[asyncpg.Pool], uf: str, cargo: str, pst
         print(f"[db] Erro ao salvar snapshot: {e}")
 
 
+def inicio_do_dia_brasilia() -> datetime:
+    """Meia-noite de hoje em Brasilia, com fuso — o inicio da apuracao do dia."""
+    agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    return agora.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
 async def buscar_historico(pool: Optional[asyncpg.Pool], uf: str, cargo: str, ultimas: int = 20) -> List[dict]:
-    """Retorna série temporal. Lista vazia se pool=None."""
+    """
+    Retorna série temporal SO DO DIA (Brasilia). Lista vazia se pool=None.
+
+    A tabela guarda tambem os snapshots dos ensaios (dados de 2022 a 100%);
+    sem este corte o grafico de evolucao comecava em 100% e caia para 0%.
+    """
     if pool is None:
         return []
     try:
@@ -71,11 +84,11 @@ async def buscar_historico(pool: Optional[asyncpg.Pool], uf: str, cargo: str, ul
             """
             SELECT time, pst_pct, payload
             FROM snapshots
-            WHERE uf = $1 AND cargo = $2
+            WHERE uf = $1 AND cargo = $2 AND time >= $4
             ORDER BY time DESC
             LIMIT $3
             """,
-            uf, cargo, ultimas,
+            uf, cargo, ultimas, inicio_do_dia_brasilia(),
         )
         return [
             {"time": str(row["time"]), "pst_pct": float(row["pst_pct"]), "payload": row["payload"]}

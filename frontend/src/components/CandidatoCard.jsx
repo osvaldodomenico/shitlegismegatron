@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { num, partido, situacao } from "../lib/tse";
-import { IconClose, IconAlert } from "./icons";
+import { IconClose, IconAlert, IconTrophy } from "./icons";
 
 /**
  * Card de um candidato acompanhado.
@@ -78,7 +78,7 @@ export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover }) {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className={`h-3 w-3 shrink-0 rounded-sm ${cor}`} aria-hidden="true" />
-                <h3 className="truncate text-base font-semibold text-muted">{cand.nm}</h3>
+                <h3 className="truncate text-base font-semibold text-muted">{cand.nmu || cand.nm}</h3>
               </div>
               <p className="mt-0.5 truncate text-xs text-faint">
                 <span className="num font-mono">{cand.n}</span> · {partido(cand)}
@@ -113,19 +113,21 @@ export function CandidatoCard({ cand, cor, corTexto, proporcao, aoRemover }) {
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-        {st && (
-          <span
-            className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
-              eleito ? "bg-success/25 text-successLit" : "bg-elevated text-subtle"
-            }`}
-          >
-            {st}
+        {eleito ? (
+          <span className="flex items-center gap-1 rounded bg-success/25 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-successLit">
+            <IconTrophy className="h-3.5 w-3.5" />
+            Eleito
           </span>
+        ) : st && (
+          <span className="rounded bg-elevated px-1.5 py-0.5 text-[11px] font-medium text-subtle">{st}</span>
         )}
         {ind && (
-          <span className="num font-mono text-[11px] text-faint">
-            {ind.posicao_agremiacao}º de {ind.total_agremiacao} na legenda
-            {ind.vagas_agremiacao !== null && ` · ${ind.vagas_agremiacao} vaga(s)`}
+          <span className="flex items-center gap-1.5 rounded-lg border border-primaryLit/40 bg-primary/20 px-2.5 py-1 text-sm font-semibold text-primaryLit">
+            <span className="num font-mono text-lg font-bold">{ind.posicao_agremiacao}º</span>
+            de {ind.total_agremiacao} na legenda
+            {ind.vagas_agremiacao !== null && (
+              <span className="font-normal text-subtle">· {ind.vagas_agremiacao} vaga(s)</span>
+            )}
           </span>
         )}
       </div>

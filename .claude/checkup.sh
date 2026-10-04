@@ -146,6 +146,17 @@ else
         fail "frontend nao respondeu HTML esperado"
     fi
 
+    # /painel (telao 1920x1080) e rota so do SPA: precisa cair no try_files do
+    # nginx e servir o MESMO bundle da raiz — se o Traefik mandar para a API
+    # vira 404/405, se o nginx nao tiver fallback vira 404.
+    painel="$(curl -sL --max-time 20 "https://$DOMINIO/painel")"
+    if printf '%s' "$painel" | grep -q 'id="root"' \
+       && [ "$(printf '%s' "$painel" | grep -oE '/assets/[^"]+\.js' | head -1)" = "$(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js' | head -1)" ]; then
+        pass "/painel servido pelo SPA com o mesmo bundle da raiz"
+    else
+        fail "/painel nao serve a aplicacao (rota do telao quebrada)"
+    fi
+
     asset="$(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js' | head -1)"
     if [ -n "$asset" ]; then
         bytes="$(curl -s -o /tmp/megatron-prod.js -w '%{size_download}' --max-time 20 "https://$DOMINIO$asset")"
