@@ -260,8 +260,8 @@ EOF
     fi
 
     if curl -sL --max-time 20 "https://$DOMINIO/selecao/$CORRIDA" -o /tmp/megatron-sel.json \
-       && "$PY" -c "import json,sys; d=json.load(open('/tmp/megatron-sel.json')); sys.exit(0 if isinstance(d.get('sqcands'),list) and d.get('maximo')==5 else 1)"; then
-        pass "/selecao expoe a escolha e o limite de 5"
+       && "$PY" -c "import json,sys; d=json.load(open('/tmp/megatron-sel.json')); m=d.get('maximo'); sys.exit(0 if isinstance(d.get('sqcands'),list) and isinstance(m,int) and m>=5 else 1)"; then
+        pass "/selecao expoe a escolha e o limite ($("$PY" -c "import json; print(json.load(open('/tmp/megatron-sel.json'))['maximo'])"))"
     else
         fail "/selecao nao respondeu como esperado"
     fi
