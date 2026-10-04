@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes, votosDoPartido, eleitosMatematicos } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes, votosDoPartido, eleitosMatematicos, corProgresso } from "./lib/tse";
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 import { SeletorCandidatos } from "./components/SeletorCandidatos";
@@ -41,8 +41,8 @@ function Secoes({ data }) {
       </div>
       <div className="mt-1.5 h-3 overflow-hidden rounded-full bg-elevated" role="progressbar"
         aria-valuenow={Math.round(pst)} aria-valuemin={0} aria-valuemax={100} aria-label="Seções totalizadas">
-        <div className="h-full rounded-full bg-gradient-to-r from-primary to-primaryLit transition-[width] duration-700 ease-out"
-          style={{ width: `${Math.min(pst, 100)}%` }} />
+        <div className="h-full rounded-full transition-[width,background-color] duration-700 ease-out"
+          style={{ width: `${Math.min(pst, 100)}%`, backgroundColor: corProgresso(pst) }} />
       </div>
     </>
   );

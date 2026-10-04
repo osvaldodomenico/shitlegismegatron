@@ -1,4 +1,4 @@
-import { num, legendaBoletim } from "../lib/tse";
+import { num, legendaBoletim, corProgresso } from "../lib/tse";
 import { Final } from "./Telao";
 import { IconBallot } from "./icons";
 
@@ -90,8 +90,8 @@ export function Hero({ data, uf, ufNome, cargoNome, connected }) {
             aria-label="Percentual de seções totalizadas"
           >
             <div
-              className="h-full rounded-full bg-gradient-to-r from-primary to-primaryLit transition-[width] duration-500 ease-out"
-              style={{ width: `${Math.min(pst, 100)}%` }}
+              className="h-full rounded-full transition-[width,background-color] duration-500 ease-out"
+              style={{ width: `${Math.min(pst, 100)}%`, backgroundColor: corProgresso(pst) }}
             />
           </div>
         </div>

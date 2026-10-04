@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, urlFoto, horaAtualizacao, eleitosMatematicos } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, horaAtualizacao, eleitosMatematicos, corProgresso } from "./lib/tse";
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 
@@ -88,8 +88,8 @@ function Faixa({ pleito, data, connected, temSelecao }) {
       </header>
       <div className="mt-2 h-1 overflow-hidden rounded-full bg-elevated" role="progressbar"
         aria-valuenow={Math.round(pst)} aria-valuemin={0} aria-valuemax={100} aria-label="Seções totalizadas">
-        <div className="h-full rounded-full bg-primaryLit transition-[width] duration-700 ease-out"
-          style={{ width: `${Math.min(pst, 100)}%` }} />
+        <div className="h-full rounded-full transition-[width,background-color] duration-700 ease-out"
+          style={{ width: `${Math.min(pst, 100)}%`, backgroundColor: corProgresso(pst) }} />
       </div>
 
       {cands.length === 0 ? (

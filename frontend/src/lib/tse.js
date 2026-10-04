@@ -195,3 +195,13 @@ export function eleitosMatematicos(data, vagas = 1) {
   }
   return eleitos;
 }
+
+/**
+ * Cor da barra de secoes totalizadas: gradual do vermelho (0%) ao verde
+ * (100%), passando pelo amarelo — a cor conta o quanto falta sem precisar
+ * ler o numero. HSL: matiz 0 -> 120.
+ */
+export function corProgresso(pst) {
+  const p = Math.min(100, Math.max(0, num(pst)));
+  return `hsl(${Math.round(p * 1.2)} 80% 48%)`;
+}

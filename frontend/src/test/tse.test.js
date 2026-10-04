@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal, votosDoPartido, eleitosMatematicos } from "../lib/tse";
+import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal, votosDoPartido, eleitosMatematicos, corProgresso } from "../lib/tse";
 
 const HOJE = "04/10/2026";
 
@@ -142,5 +142,14 @@ describe("eleitosMatematicos", () => {
     const d = { pst: "0,00", vv: "0", cand: [{ sqcand: "A", vap: "0" }] };
     expect(eleitosMatematicos(d, 1).size).toBe(0);
     expect(eleitosMatematicos({ ...d, pst: "100,00", vv: "10", cand: [{ sqcand: "A", vap: "10" }] }, 1).size).toBe(0);
+  });
+});
+
+describe("corProgresso", () => {
+  it("vai do vermelho ao verde conforme as secoes fecham", () => {
+    expect(corProgresso("0,00")).toBe("hsl(0 80% 48%)");
+    expect(corProgresso("50,00")).toBe("hsl(60 80% 48%)");
+    expect(corProgresso("100,00")).toBe("hsl(120 80% 48%)");
+    expect(corProgresso("150")).toBe("hsl(120 80% 48%)");
   });
 });
