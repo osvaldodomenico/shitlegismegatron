@@ -504,6 +504,30 @@ async def etapa_lugares(pg, con, ibge) -> int:
     return total
 
 
+# ---- total estadual por candidato (resultados_candidato)
+
+def etapa_estadual(con) -> int:
+    """Soma das cidades -> total estadual por candidato. Rankings, comparativo, partido e
+    historico do BI leem resultados_candidato; sem 2026 ali essas telas ficam vazias.
+    Apaga e regrava na mesma transacao: o BI nunca ve a tabela pela metade."""
+    sg = UF.upper()
+    bi_apagar(con, "DELETE FROM resultados_candidato WHERE ano = 2026 AND sigla_uf = %s", (sg,))
+    with con.cursor() as cur:
+        n = cur.execute("""
+            INSERT INTO resultados_candidato
+                (ano, turno, id_eleicao, tipo_eleicao, data_eleicao, sigla_uf, id_municipio, id_municipio_tse,
+                 cargo, numero_partido, sigla_partido, titulo_eleitoral_candidato, sequencial_candidato,
+                 numero_candidato, resultado, votos, etl_id)
+            SELECT ano, turno, MAX(id_eleicao), MAX(tipo_eleicao), MAX(data_eleicao), sigla_uf, NULL, NULL,
+                   cargo, MAX(numero_partido), MAX(sigla_partido), MAX(titulo_eleitoral_candidato), sequencial_candidato,
+                   numero_candidato, MAX(resultado), SUM(votos), NULL
+            FROM resultados_candidato_municipio
+            WHERE ano = 2026 AND sigla_uf = %s
+            GROUP BY ano, turno, sigla_uf, cargo, sequencial_candidato, numero_candidato""", (sg,))
+    con.commit()
+    return n
+
+
 # ---- secao (boletins de urna)
 
 async def mapa_candidatos(pg) -> dict[tuple[str, int], dict]:
@@ -626,23 +650,30 @@ async def rodada(pg, redis, client) -> dict:
     try:
         for etapa in ETAPAS:
             t0 = time.monotonic()
-            if etapa == "locais":
-                n = await etapa_locais(pg, con, ibge)
-            elif etapa == "candidatos":
-                n = await etapa_candidatos(pg, con, client)
-            elif etapa == "bens":
-                n = await etapa_bens(pg, con, client)
-            elif etapa == "perfil":
-                n = await etapa_perfil(pg, con, client, ibge)
-            elif etapa == "receitas":
-                n = await etapa_receitas(pg, con, client)
-            elif etapa == "despesas":
-                n = await etapa_despesas(pg, con, client)
-            elif etapa == "lugares":
-                n = await etapa_lugares(pg, con, ibge)
-            elif etapa == "secoes":
-                n = await etapa_secoes(pg, con, ibge)
-            else:
+            try:
+                if etapa == "locais":
+                    n = await etapa_locais(pg, con, ibge)
+                elif etapa == "candidatos":
+                    n = await etapa_candidatos(pg, con, client)
+                elif etapa == "bens":
+                    n = await etapa_bens(pg, con, client)
+                elif etapa == "perfil":
+                    n = await etapa_perfil(pg, con, client, ibge)
+                elif etapa == "receitas":
+                    n = await etapa_receitas(pg, con, client)
+                elif etapa == "despesas":
+                    n = await etapa_despesas(pg, con, client)
+                elif etapa == "lugares":
+                    n = await etapa_lugares(pg, con, ibge)
+                    if n:  # alguma cidade mudou -> refaz o total estadual
+                        feito["estadual"] = etapa_estadual(con)
+                elif etapa == "secoes":
+                    n = await etapa_secoes(pg, con, ibge)
+                else:
+                    continue
+            except httpx.HTTPError as e:  # TSE fora do ar ou limitando (429): pula so esta etapa
+                con.rollback()
+                print(f"[bi] etapa {etapa} pulada (TSE): {e!r}", file=sys.stderr, flush=True)
                 continue
             feito[etapa] = n
             print(f"[bi] etapa {etapa}: {n} linhas em {time.monotonic() - t0:.0f}s", flush=True)
