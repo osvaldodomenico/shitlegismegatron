@@ -84,26 +84,57 @@ def calcular(payload: dict) -> dict:
         if str(c.get("dvt", "Válido")).startswith("Válido")
     ]
 
+    # Agrupa pela AGREMIACAO (partido ou federacao): `partidos[].agr` diz a
+    # qual agremiacao cada partido pertence, e e por agremiacao que o TSE
+    # distribui as vagas (`vagas_por_agremiacao`). Sem `partidos` (payload
+    # antigo), cai no agrupamento por sigla.
+    agr_por_numero = {str(p.get("n")): str(p.get("agr") or "") for p in (payload.get("partidos") or [])}
+    agr_por_sigla = {str(p.get("sg") or "").upper(): str(p.get("agr") or "") for p in (payload.get("partidos") or [])}
+    vagas_por_agr = {str(k): _int(v) for k, v in (payload.get("vagas_por_agremiacao") or {}).items()}
+
+    def _agr(c: dict) -> str:
+        return (agr_por_numero.get(str(c.get("ccd") or ""))
+                or agr_por_sigla.get(str(c.get("cc") or "").upper())
+                or (c.get("cc") or "—"))
+
     por_agremiacao = defaultdict(list)
     for c in validos_cand:
-        por_agremiacao[c.get("cc") or "—"].append(c)
+        por_agremiacao[_agr(c)].append(c)
 
     por_candidato = {}
-    for _cc, lista in por_agremiacao.items():
+    for agr, lista in por_agremiacao.items():
         lista.sort(key=lambda c: -_int(c.get("vap")))
-        # Vagas da agremiacao: a contagem que o proprio TSE ja publicou.
-        # Enquanto nenhum `st` esta preenchido (inicio da apuracao), fica None
-        # e a interface mostra "aguardando" em vez de inventar um numero.
+        # Vagas da agremiacao: primeiro o que o TSE ja marcou em `st`
+        # (definitivo). Antes disso, a distribuicao de vagas que o TSE publica
+        # a cada boletim (`vag`) — e uma PROJECAO: os mais votados da
+        # agremiacao acima da barreira ocupam as vagas.
         eleitos = sum(1 for c in lista if _eleito(c))
         definido = any(str(c.get("st", "")).strip() for c in lista)
-        vagas_agr = eleitos if definido else None
+        projecao = False
+        if definido:
+            vagas_agr = eleitos
+            dentro_set = {str(c.get("sqcand")) for c in lista if _eleito(c)}
+        elif agr in vagas_por_agr:
+            projecao = True
+            vagas_agr = vagas_por_agr[agr]
+            dentro_set, ocupadas = set(), 0
+            for c in lista:
+                if ocupadas < vagas_agr and _int(c.get("vap")) >= barreira:
+                    dentro_set.add(str(c.get("sqcand")))
+                    ocupadas += 1
+            eleitos = len(dentro_set)
+        else:
+            vagas_agr = None
+            dentro_set = set()
 
-        ultimo_dentro = lista[eleitos - 1] if eleitos else None
-        primeiro_fora = lista[eleitos] if len(lista) > eleitos else None
+        dentro_lista = [c for c in lista if str(c.get("sqcand")) in dentro_set]
+        fora_lista = [c for c in lista if str(c.get("sqcand")) not in dentro_set]
+        ultimo_dentro = dentro_lista[-1] if dentro_lista else None
+        primeiro_fora = fora_lista[0] if fora_lista else None
 
         for i, c in enumerate(lista):
             votos = _int(c.get("vap"))
-            dentro = _eleito(c)
+            dentro = str(c.get("sqcand")) in dentro_set
             # Margem: quem esta dentro compara com o primeiro de fora; quem
             # esta fora compara com o ultimo de dentro. Sempre "quantos votos
             # me separam da linha".
@@ -127,6 +158,9 @@ def calcular(payload: dict) -> dict:
                 "passou_barreira": votos >= barreira if barreira else None,
                 "falta_barreira": max(barreira - votos, 0) if barreira else None,
                 "situacao": c.get("st") or "",
+                # True = vagas/corte vem da distribuicao publicada pelo TSE
+                # (projecao); False = do `st` definitivo.
+                "projecao": projecao,
             }
 
     return {

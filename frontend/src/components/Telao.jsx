@@ -46,11 +46,11 @@ export function Selo({ cand, tamanho = "sm", projecao = false }) {
   const base = `flex shrink-0 items-center gap-1 rounded font-bold uppercase tracking-wider ${t.selo}`;
   // Projecao matematica (eleitosMatematicos): vale ate o TSE publicar `st`.
   if (!tipo && projecao) {
+    const rotulo = typeof projecao === "string" ? projecao : "mat.";
     return (
       <span className={`${base} bg-success/25 text-successLit`} title="Projeção matemática: o adversário não alcança mais. O TSE ainda não publicou a situação.">
         <IconTrophy className={t.icone} />Eleito
-        {tamanho !== "xs" && <span className="font-normal normal-case tracking-normal opacity-80">· matemático</span>}
-        {tamanho === "xs" && <span className="font-normal normal-case tracking-normal opacity-80">(mat.)</span>}
+        <span className="font-normal normal-case tracking-normal opacity-80">({rotulo})</span>
       </span>
     );
   }

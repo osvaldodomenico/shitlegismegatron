@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal, votosDoPartido, eleitosMatematicos, corProgresso, derrotado } from "../lib/tse";
+import { legendaBoletim, urlFoto, rankingDaLegenda, classificarSituacao, resumoSituacoes, boletimFinal, votosDoPartido, eleitosMatematicos, corProgresso, derrotado, eleitosProporcionais, quocienteEleitoral } from "../lib/tse";
 
 const HOJE = "04/10/2026";
 
@@ -169,5 +169,42 @@ describe("derrotado", () => {
     expect(derrotado(fora, new Set(["A", "C"]), 2)).toBe(true);
     expect(derrotado(fora, new Set(), 1)).toBe(false);
     expect(derrotado({ sqcand: "A", st: "" }, new Set(["A"]), 1)).toBe(false);
+  });
+});
+
+describe("eleitosProporcionais", () => {
+  const data = {
+    vv: "1000", v: "10",                      // QE = 100, barreira = 10
+    vagas_por_agremiacao: { AGR1: 2, AGR2: 1, AGR3: 0 },
+    partidos: [
+      { n: "10", sg: "REPUBLICANOS", agr: "AGR1" },
+      { n: "18", sg: "PSOL", agr: "AGR2" }, { n: "50", sg: "REDE", agr: "AGR2" },   // federacao
+      { n: "30", sg: "NOVO", agr: "AGR3" },
+    ],
+    cand: [
+      { sqcand: "R1", cc: "REPUBLICANOS", ccd: "10", vap: "300" },
+      { sqcand: "R2", cc: "REPUBLICANOS", ccd: "10", vap: "5" },     // abaixo da barreira: pula
+      { sqcand: "R3", cc: "REPUBLICANOS", ccd: "10", vap: "50" },
+      { sqcand: "R4", cc: "REPUBLICANOS", ccd: "10", vap: "40" },
+      { sqcand: "P1", cc: "PSOL", ccd: "18", vap: "80" },
+      { sqcand: "D1", cc: "REDE", ccd: "50", vap: "120" },           // federacao: 1 vaga vai ao mais votado
+      { sqcand: "N1", cc: "NOVO", ccd: "30", vap: "200" },           // partido sem vaga
+    ],
+  };
+
+  it("ocupa as vagas da agremiacao com os mais votados acima da barreira", () => {
+    const { eleitos, suplentes } = eleitosProporcionais(data);
+    expect([...eleitos].sort()).toEqual(["D1", "R1", "R3"]);
+    expect(suplentes.has("R2") && suplentes.has("R4") && suplentes.has("P1") && suplentes.has("N1")).toBe(true);
+  });
+
+  it("sem vagas distribuidas pelo TSE nao projeta nada", () => {
+    expect(eleitosProporcionais({ ...data, vagas_por_agremiacao: {} }).eleitos.size).toBe(0);
+  });
+
+  it("quociente segue o art. 106", () => {
+    expect(quocienteEleitoral(1000, 10)).toBe(100);
+    expect(quocienteEleitoral(1005, 10)).toBe(100);   // 100,5 -> despreza
+    expect(quocienteEleitoral(1006, 10)).toBe(101);   // 100,6 -> sobe
   });
 });

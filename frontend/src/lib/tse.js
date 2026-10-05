@@ -220,3 +220,60 @@ export function derrotado(cand, matematicos = null, vagas = 1) {
   const n = Math.max(1, Math.floor(num(vagas)) || 1);
   return matematicos.size >= n && !matematicos.has(String(cand.sqcand));
 }
+
+/** Art. 106 do Codigo Eleitoral: despreza fracao <= 0,5; arredonda para cima acima disso. */
+export function quocienteEleitoral(validos, vagas) {
+  if (!vagas) return 0;
+  const bruto = validos / vagas;
+  const inteiro = Math.floor(bruto);
+  return inteiro + (bruto - inteiro > 0.5 ? 1 : 0);
+}
+
+/**
+ * Eleitos PROJETADOS em corrida proporcional (dep. federal/estadual), a partir
+ * do que o TSE ja publica em cada boletim:
+ *   - `vagas_por_agremiacao`: quantas cadeiras cada agremiacao (partido ou
+ *     federacao) leva pela distribuicao atual (quociente partidario + sobras);
+ *   - `partidos[].agr`: a agremiacao de cada partido (federacao agrupa varios);
+ *   - barreira individual: 10% do quociente eleitoral (Lei 14.211/2021).
+ * Dentro de cada agremiacao, os mais votados acima da barreira ocupam as vagas.
+ * Devolve { eleitos: Set<sqcand>, suplentes: Set<sqcand> } — vazio quando o
+ * TSE ainda nao distribuiu vagas. Vale ate o TSE preencher `st`.
+ */
+export function eleitosProporcionais(data) {
+  const vazio = { eleitos: new Set(), suplentes: new Set() };
+  const vagasPorAgr = data?.vagas_por_agremiacao || {};
+  const partidos = data?.partidos || [];
+  if (!Object.keys(vagasPorAgr).length || !partidos.length) return vazio;
+  const qe = quocienteEleitoral(num(data?.vv), num(data?.v));
+  if (!qe) return vazio;
+  const barreira = qe * 0.1;
+  const agrPorSigla = new Map(partidos.map((p) => [String(p.sg || "").toUpperCase(), String(p.agr || "")]));
+  const agrPorNumero = new Map(partidos.map((p) => [String(p.n || ""), String(p.agr || "")]));
+  const porAgr = new Map();
+  for (const c of candidatos(data)) {
+    const agr = agrPorNumero.get(String(c.ccd || "")) || agrPorSigla.get(partido(c).toUpperCase());
+    if (!agr) continue;
+    if (!porAgr.has(agr)) porAgr.set(agr, []);
+    porAgr.get(agr).push(c);
+  }
+  const eleitos = new Set(), suplentes = new Set();
+  for (const [agr, lista] of porAgr) {
+    const vagas = Math.max(0, Math.floor(num(vagasPorAgr[agr])));
+    const ordem = lista.sort((a, b) => num(b.vap) - num(a.vap));
+    let ocupadas = 0;
+    for (const c of ordem) {
+      if (ocupadas < vagas && num(c.vap) >= barreira) { eleitos.add(String(c.sqcand)); ocupadas += 1; }
+      else suplentes.add(String(c.sqcand));
+    }
+  }
+  return { eleitos, suplentes };
+}
+
+/** Projecao do servidor (ind.projecao) para um candidato de proporcional. */
+export function projecaoDoInd(cand) {
+  const ind = cand?.ind;
+  if (!ind || ind.vagas_agremiacao === null || ind.vagas_agremiacao === undefined) return { eleito: false, fora: false };
+  const eleito = !!ind.dentro_do_corte;
+  return { eleito, fora: !eleito };
+}

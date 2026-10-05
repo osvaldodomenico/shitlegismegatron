@@ -58,6 +58,7 @@ function LinhaDeCorte({ ind }) {
       {ind.referencia && (
         <span className="text-faint"> · ref. {ind.referencia}</span>
       )}
+      {ind.projecao && <span className="text-faint"> · projeção pelas vagas do TSE</span>}
     </p>
   );
 }

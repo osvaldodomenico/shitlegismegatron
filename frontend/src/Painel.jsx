@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes, votosDoPartido, eleitosMatematicos, corProgresso, derrotado } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, legendaBoletim, rankingDaLegenda, resumoSituacoes, votosDoPartido, eleitosMatematicos, corProgresso, derrotado, eleitosProporcionais } from "./lib/tse";
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 import { SeletorCandidatos } from "./components/SeletorCandidatos";
@@ -167,6 +167,9 @@ function ColunaRanking({ cfg, data, connected, aoClicar }) {
   // Assim que o TSE preencher `st`, o resumo da legenda substitui a contagem crua.
   const resumo = resumoSituacoes(todos);
   const vp = votosDoPartido(data, cfg.partido);
+  // Projecao proporcional (vagas por agremiacao do TSE + barreira) — vale ate o `st`.
+  const proj = resumo.length ? { eleitos: new Set(), suplentes: new Set() } : eleitosProporcionais(data);
+  const projNaLegenda = todos.filter((c) => proj.eleitos.has(String(c.sqcand))).length;
 
   return (
     <section className="flex min-h-0 min-w-0 flex-col overflow-hidden px-6 py-5" aria-label={`${cfg.titulo} · São Paulo · ${cfg.partido}`}>
@@ -178,6 +181,10 @@ function ColunaRanking({ cfg, data, connected, aoClicar }) {
           {resumo.length ? (
             <span className="font-semibold text-successLit">
               {resumo.map((r) => `${r.n} ${r.texto}`).join(" · ")}
+            </span>
+          ) : proj.eleitos.size ? (
+            <span className="font-semibold text-successLit">
+              Projeção: {projNaLegenda} eleito(s) de {total} <span className="font-normal text-subtle">· vagas do TSE + barreira de 10%</span>
             </span>
           ) : (
             <span className="text-subtle">Ranking na legenda · {total} candidatos</span>
@@ -222,7 +229,8 @@ function ColunaRanking({ cfg, data, connected, aoClicar }) {
         <ol className="mt-3 flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overscroll-contain pr-1">
           {lista.map((c) => (
             <LinhaCompacta key={c.sqcand || c.seq} cand={c} posicao={c.posicao} destaque={c.destaque}
-              apagada={derrotado(c)}
+              projecao={proj.eleitos.has(String(c.sqcand)) ? "proj." : false}
+              apagada={derrotado(c) || proj.suplentes.has(String(c.sqcand))}
               aoClicar={aoClicar}
               proporcao={(num(c.vap) / lider) * 100}
               foto={c.foto || urlFoto(data?.cdabr || "sp", data?.ele, c.sqcand)} />

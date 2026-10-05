@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useElectionSocket } from "./hooks/useElectionSocket";
-import { candidatos as lerCandidatos, num, partido, urlFoto, horaAtualizacao, eleitosMatematicos, corProgresso, derrotado } from "./lib/tse";
+import { candidatos as lerCandidatos, num, partido, urlFoto, horaAtualizacao, eleitosMatematicos, corProgresso, derrotado, projecaoDoInd } from "./lib/tse";
 import * as api from "./lib/api";
 import { Foto, CabecalhoTelao, Selo, Final } from "./components/Telao";
 
@@ -100,8 +100,8 @@ function Faixa({ pleito, data, connected, temSelecao }) {
         <ol className="mt-3 grid flex-1 grid-cols-5 gap-3">
           {cands.map((c) => (
             <Card key={c.sqcand || c.seq} cand={c} proporcional={pleito.proporcional}
-              projecao={matematicos.has(String(c.sqcand))}
-              apagada={derrotado(c, matematicos, data?.v)}
+              projecao={pleito.proporcional ? (projecaoDoInd(c).eleito ? "proj." : false) : matematicos.has(String(c.sqcand))}
+              apagada={pleito.proporcional ? (derrotado(c) || projecaoDoInd(c).fora) : derrotado(c, matematicos, data?.v)}
               proporcao={(num(c.vap) / lider) * 100}
               foto={c.foto || urlFoto(data?.cdabr || pleito.uf, data?.ele, c.sqcand)} />
           ))}

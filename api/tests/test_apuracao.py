@@ -141,3 +141,28 @@ def test_preparar_calcula_antes_de_filtrar():
     assert r["cand"][0]["foto"].endswith("/fotos/sp/C.jpeg")
     assert r["indicadores"]["quociente_eleitoral"] == 500
     assert "por_candidato" not in r["indicadores"]
+
+
+def test_projecao_usa_vagas_por_agremiacao_antes_do_st(): 
+    """Sem `st`, as vagas publicadas pelo TSE por agremiacao definem o corte (projecao)."""
+    import apuracao
+    payload = {
+        "v": "10", "vv": "1000", "pst": "95,00",      # QE 100, barreira 10
+        "vagas_por_agremiacao": {"AGR1": 2, "AGR2": 1},
+        "partidos": [{"n": "10", "sg": "REPUBLICANOS", "agr": "AGR1"},
+                     {"n": "18", "sg": "PSOL", "agr": "AGR2"}, {"n": "50", "sg": "REDE", "agr": "AGR2"}],
+        "cand": [
+            {"sqcand": "R1", "nm": "R1", "cc": "REPUBLICANOS", "ccd": "10", "vap": "300", "st": "", "dvt": "Válido"},
+            {"sqcand": "R2", "nm": "R2", "cc": "REPUBLICANOS", "ccd": "10", "vap": "5", "st": "", "dvt": "Válido"},
+            {"sqcand": "R3", "nm": "R3", "cc": "REPUBLICANOS", "ccd": "10", "vap": "50", "st": "", "dvt": "Válido"},
+            {"sqcand": "P1", "nm": "P1", "cc": "PSOL", "ccd": "18", "vap": "80", "st": "", "dvt": "Válido"},
+            {"sqcand": "D1", "nm": "D1", "cc": "REDE", "ccd": "50", "vap": "120", "st": "", "dvt": "Válido"},
+        ],
+    }
+    ind = apuracao.calcular(payload)["por_candidato"]
+    assert ind["R1"]["dentro_do_corte"] and ind["R3"]["dentro_do_corte"] and ind["R1"]["projecao"]
+    assert not ind["R2"]["dentro_do_corte"]            # abaixo da barreira, mesmo com vaga sobrando
+    assert ind["R1"]["vagas_agremiacao"] == 2
+    assert ind["D1"]["dentro_do_corte"] and not ind["P1"]["dentro_do_corte"]   # federacao: 1 vaga, mais votado
+    assert ind["P1"]["margem"] == 80 - 120 and ind["P1"]["referencia"] == "D1"
+    assert ind["R3"]["margem"] == 50 - 5 and ind["R3"]["referencia"] == "R2"
