@@ -161,7 +161,7 @@ services:
       URNA_PLEITO: ${URNA_PLEITO:-3220}
       URNA_UFS: ${URNA_UFS:-sp}
       URNA_DIR: /dados/urnas
-      URNA_CONCURRENCY: ${URNA_CONCURRENCY:-8}
+      URNA_CONCURRENCY: ${URNA_CONCURRENCY:-16}
       URNA_INTERVAL_SECONDS: ${URNA_INTERVAL_SECONDS:-1800}
       URNA_FASES: ${URNA_FASES:-bu,imgbu|rdv,vota,log}
     volumes:

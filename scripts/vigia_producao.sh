@@ -66,6 +66,12 @@ else
     [ "${ERROS_MUN:-0}" -gt 100 ] && anotar "coletor de municipios com $ERROS_MUN erros no ultimo ciclo"
 fi
 
+# ------------------------------------ 2c) heartbeat do coletor de urnas
+# Varredura longa (horas); o heartbeat e renovado a cada lote de 500 secoes e
+# expira em 3x o intervalo. Sem batimento = varredura travada.
+HB_URNA="$(docker exec megatron-redis-1 redis-cli get megatron:heartbeat:urnas 2>/dev/null </dev/null)"
+[ -z "$HB_URNA" ] && anotar "coletor de urnas sem batimento (chave ausente ou expirada)"
+
 # --------------------------------------------- 3) as corridas configuradas
 CORRIDAS="$(python3 - "$RAIZ/.env" <<'PY'
 import sys

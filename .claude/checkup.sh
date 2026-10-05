@@ -173,6 +173,14 @@ else
         fail "coletor de municipios parado ou incompleto ($(printf '%s' "$mun" | tail -2 | tr '\n' ' '))"
     fi
 
+    # Coletor de urnas: heartbeat + boletins (bu) ja no disco/indice.
+    urn="$(ssh -o ConnectTimeout=10 vps2 'docker exec megatron-redis-1 redis-cli get megatron:heartbeat:urnas; docker exec megatron-timescaledb-1 psql -U megatron -d megatron -tAc "select count(*) from urna_secao where arquivos ? chr(98)||chr(117)"' 2>/dev/null)"
+    if printf '%s' "$urn" | head -1 | grep -q '"ts"' && [ "$(printf '%s' "$urn" | tail -1)" -gt 1000 ] 2>/dev/null; then
+        pass "coletor de urnas vivo — $(printf '%s' "$urn" | tail -1) secoes com boletim no disco"
+    else
+        fail "coletor de urnas parado ou sem boletins ($(printf '%s' "$urn" | tail -1))"
+    fi
+
     asset="$(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js' | head -1)"
     if [ -n "$asset" ]; then
         bytes="$(curl -s -o /tmp/megatron-prod.js -w '%{size_download}' --max-time 20 "https://$DOMINIO$asset")"

@@ -58,7 +58,7 @@ def _z(v, n) -> str:
 
 
 def url_aux(base: str, pleito: str, uf: str, mun: str, zona, secao) -> str:
-    p = str(pleito).zfill(5)
+    p = str(pleito).zfill(6)   # p003220-...: o pleito vai com SEIS digitos no nome do indice
     return (f"{base}/arquivo-urna/{int(pleito)}/dados/{uf}/{_z(mun, 5)}/{_z(zona, 4)}/{_z(secao, 4)}/"
             f"p{p}-{uf}-m{_z(mun, 5)}-z{_z(zona, 4)}-s{_z(secao, 4)}-aux.json")
 
