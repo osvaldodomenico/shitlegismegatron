@@ -1,23 +1,29 @@
 """
-Coletor por MUNICIPIO e por ZONA ELEITORAL — grava no Postgres, em tempo
-real, o boletim de cada cidade (e de cada zona dentro dela) da UF para cada
-cargo, para apuracao e indicadores depois.
+Coletor TERRITORIAL — grava no Postgres, em tempo real, tudo que o TSE
+publica por abrangencia: cada cidade e cada zona eleitoral da UF (todos os
+cargos, presidente incluido), cada UF (presidente) e o Brasil (presidente),
+para apuracao e indicadores depois.
 
-Fonte: o mesmo esquema `dados/<uf>/<uf><cod>-c<CCCC>-e<ELEICA>-u.json` do
-collector principal, com o codigo TSE do municipio colado na UF
-(sp71072 = Sao Paulo) e, no nivel zona, `-z<ZZZZ>` depois dele
-(sp71072-z0020-...). A lista de municipios e das zonas de cada um vem de
-`<ELE>/config/mun-e<ELEICA>-cm.json`. Abaixo da zona (secao / boletim de
-urna) o TSE serve so o indice; os arquivos respondem 403/404 — fora daqui.
+Fonte: o mesmo esquema `dados/<abr>/<abr>-c<CCCC>-e<ELEICA>-u.json` do
+collector principal. Abrangencias:
+    uf        sp-c0003-e006259           (estado)
+    municipio sp71072-c0006-e006259      (codigo TSE da cidade colado na UF)
+    zona      sp71072-z0020-c0006-...    (zona dentro da cidade)
+    br        br-c0001-e006257           (presidente, nacional)
+Presidente usa o codigo de eleicao NACIONAL (ELE_1T_BR); os demais, o da UF
+(ELE_1T). A lista de municipios/zonas vem de `<ELE>/config/mun-e<ELEICA>-cm.json`.
+Abaixo da zona (secao / boletim de urna) o TSE serve so o indice; os
+arquivos respondem 403/404 — fora daqui.
 
 Decisoes de peso (VPS compartilhada com o BI do cliente, ~2 GB livres):
   - poucos downloads em paralelo (MUN_CONCURRENCY) e ciclo de 5 min;
   - If-None-Match: o TSE devolve 304 para arquivo que nao mudou — sem corpo;
-  - no banco fica o ESTADO ATUAL de cada (cargo, municipio) como jsonb
-    enxuto (candidatos com so os campos que importam) + uma serie leve de
-    totais por ciclo. Explodir em uma linha por candidato (ate 1,3 mi de
-    linhas por ciclo) seria pesado demais; a view `votos_municipio_candidato`
-    faz isso sob demanda com jsonb_array_elements.
+  - no banco fica o ESTADO ATUAL de cada (nivel, cargo, lugar) como jsonb
+    enxuto: candidatos com os campos que importam, partidos, vagas por
+    agremiacao, federacoes e os blocos de TOTAIS do TSE (secoes, eleitorado,
+    comparecimento, abstencao, brancos, nulos) + uma serie leve por ciclo.
+    As views `votos_municipio_candidato`, `_partido` e `_totais` explodem
+    isso sob demanda.
 
 Nao toca no Redis de dados nem no collector principal: so escreve um
 heartbeat proprio (`megatron:heartbeat:municipios`).
@@ -39,23 +45,29 @@ from tse_urls import CARGO_CODIGOS, PATH_DADOS, SUFIXO
 
 TSE_BASE_URL = os.environ.get("TSE_BASE_URL", "")
 ELE = os.environ.get("ELE_1T", "")
+ELE_BR = os.environ.get("ELE_1T_BR") or ELE
 POSTGRES_URL = os.environ.get("POSTGRES_URL", "")
 REDIS_URL = os.environ.get("REDIS_URL", "")
 
 UF = os.environ.get("MUN_UF", "sp").strip().lower()
 CARGOS = [c.strip() for c in os.environ.get(
-    "MUN_CARGOS", "governador,senador,dep_federal,dep_estadual").split(",") if c.strip()]
+    "MUN_CARGOS", "presidente,governador,senador,dep_federal,dep_estadual").split(",") if c.strip()]
 INTERVALO = int(os.environ.get("MUN_INTERVAL_SECONDS", "300"))
-CONCORRENCIA = int(os.environ.get("MUN_CONCURRENCY", "6"))
-# Niveis coletados: "municipio" (um arquivo por cidade) e "zona" (um por
-# zona eleitoral de cada cidade — a zona pode se repetir em cidades vizinhas).
-NIVEIS = [n.strip() for n in os.environ.get("MUN_NIVEIS", "municipio,zona").split(",") if n.strip()]
+CONCORRENCIA = int(os.environ.get("MUN_CONCURRENCY", "8"))
+# Niveis: municipio e zona (todos os CARGOS na UF), uf (presidente em TODAS
+# as UFs + os cargos estaduais da propria UF) e br (presidente nacional).
+NIVEIS = [n.strip() for n in os.environ.get("MUN_NIVEIS", "municipio,zona,uf,br").split(",") if n.strip()]
 
+CARGOS_NACIONAIS = frozenset({"presidente"})
 HEARTBEAT = "megatron:heartbeat:municipios"
 
 # Campos do candidato que a apuracao posterior usa. O resto (datas, flags,
-# vice/suplentes) so inflaria o jsonb de 645 cidades x 4 cargos.
+# vice/suplentes) so inflaria o jsonb de 645 cidades x 5 cargos.
 CAMPOS_CAND = ("sqcand", "n", "nm", "nmu", "cc", "ccd", "vap", "pvap", "st", "dvt")
+
+
+def ele_de(cargo: str) -> str:
+    return ELE_BR if cargo in CARGOS_NACIONAIS else ELE
 
 
 # ------------------------------------------------------------------ URLs
@@ -73,21 +85,49 @@ def url_municipio(base: str, ele: str, uf: str, cod: str, cargo: str, zona: str 
     )
 
 
-def tarefas_de(municipios: list[dict], cargos: list[str], niveis: list[str]) -> list[tuple[dict, str, str]]:
-    """(municipio, cargo, zona) — zona vazia = nivel municipio."""
-    saida = []
+def url_abrangencia(base: str, ele: str, abr: str, cargo: str) -> str:
+    """Arquivo de uma UF ("sp") ou do Brasil ("br")."""
+    return (
+        f"{base}/{ele}/{PATH_DADOS}/{abr}/"
+        f"{abr}-c{CARGO_CODIGOS[cargo]}-e{str(ele).zfill(6)}-{SUFIXO}.json"
+    )
+
+
+def tarefas_de(municipios: list[dict], cargos: list[str], niveis: list[str],
+               uf: str = "sp", ufs: Optional[list[str]] = None, ele: str = "", ele_br: str = "") -> list[dict]:
+    """
+    Uma tarefa por arquivo: {nivel, uf, cod, zona, cargo, nome, url_ele}.
+      municipio/zona: cada cidade (e zona) da UF, para cada cargo.
+      uf: presidente em todas as UFs + cargos estaduais da propria UF.
+      br: presidente nacional.
+    """
+    ele_br = ele_br or ele
+    saida: list[dict] = []
     for cargo in cargos:
+        e = ele_br if cargo in CARGOS_NACIONAIS else ele
         for m in municipios:
             if "municipio" in niveis:
-                saida.append((m, cargo, ""))
+                saida.append({"nivel": "municipio", "uf": uf, "cod": m["cod"], "zona": "", "cargo": cargo, "nome": m["nome"], "ele": e})
             if "zona" in niveis:
                 for z in m.get("zonas") or []:
-                    saida.append((m, cargo, z))
+                    saida.append({"nivel": "zona", "uf": uf, "cod": m["cod"], "zona": z, "cargo": cargo, "nome": m["nome"], "ele": e})
+        if "uf" in niveis:
+            abrs = (ufs or [uf]) if cargo in CARGOS_NACIONAIS else [uf]
+            for a in abrs:
+                saida.append({"nivel": "uf", "uf": a, "cod": a, "zona": "", "cargo": cargo, "nome": a.upper(), "ele": e})
+        if "br" in niveis and cargo in CARGOS_NACIONAIS:
+            saida.append({"nivel": "br", "uf": "br", "cod": "br", "zona": "", "cargo": cargo, "nome": "BRASIL", "ele": e})
     return saida
 
 
+def url_da(base: str, t: dict) -> str:
+    if t["nivel"] in ("uf", "br"):
+        return url_abrangencia(base, t["ele"], t["cod"], t["cargo"])
+    return url_municipio(base, t["ele"], t["uf"], t["cod"], t["cargo"], t["zona"])
+
+
 def municipios_da_uf(cm: dict, uf: str) -> list[dict]:
-    """Lista {cod, ibge, nome, capital} da UF a partir do mun-...-cm.json."""
+    """Lista {cod, ibge, nome, capital, zonas} da UF a partir do mun-...-cm.json."""
     for abr in cm.get("abr") or []:
         if str(abr.get("cd", "")).lower() == uf:
             return [
@@ -101,6 +141,11 @@ def municipios_da_uf(cm: dict, uf: str) -> list[dict]:
                 for m in abr.get("mu") or []
             ]
     return []
+
+
+def ufs_do_config(cm: dict) -> list[str]:
+    """Siglas das UFs no config (27, 'zz' = exterior fica de fora)."""
+    return sorted({str(a.get("cd", "")).lower() for a in cm.get("abr") or []} - {"", "zz", "br"})
 
 
 # ------------------------------------------------------------ payload
@@ -119,13 +164,23 @@ def _num(v) -> float:
         return 0.0
 
 
-def enxugar(flat: dict) -> dict:
-    """Payload plano reduzido ao que a analise por cidade precisa."""
+def enxugar(flat: dict, bruto: Optional[dict] = None) -> dict:
+    """
+    Payload plano reduzido ao que a analise precisa — MAIS os blocos de totais
+    do arquivo original (`s` secoes, `e` eleitorado/comparecimento/abstencao,
+    `v` votos validos/brancos/nulos/legenda) e as federacoes, que o achatador
+    nao preserva.
+    """
+    bruto = bruto or {}
     cands = [{k: c.get(k) for k in CAMPOS_CAND if k in c} for c in flat.get("cand") or []]
+    cargos = bruto.get("carg") or []
     return {
-        "ele": flat.get("ele"), "cdabr": flat.get("cdabr"), "dg": flat.get("dg"), "hg": flat.get("hg"),
-        "tf": flat.get("tf"), "pst": flat.get("pst"), "e": flat.get("e"), "v": flat.get("v"),
+        "ele": flat.get("ele"), "tpabr": flat.get("tpabr"), "cdabr": flat.get("cdabr"),
+        "dg": flat.get("dg"), "hg": flat.get("hg"), "tf": flat.get("tf"),
+        "pst": flat.get("pst"), "e": flat.get("e"), "v": flat.get("v"), "tv": flat.get("tv"),
         "vv": flat.get("vv"), "vnom": flat.get("vnom"),
+        "totais": {"s": bruto.get("s") or {}, "e": bruto.get("e") or {}, "v": bruto.get("v") or {}},
+        "federacoes": [f for c in cargos for f in (c.get("fed") or [])],
         "partidos": flat.get("partidos") or [],
         "vagas_por_agremiacao": flat.get("vagas_por_agremiacao") or {},
         "cand": cands,
@@ -198,7 +253,7 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS votos_municipio_hist_idx ON votos_municipio_hist (uf, cargo, cod_tse, cod_zona, time DESC);
 
--- Uma linha por candidato por cidade/zona, explodida do jsonb sob demanda.
+-- Uma linha por candidato por lugar, explodida do jsonb sob demanda.
 DROP VIEW IF EXISTS votos_municipio_candidato;
 CREATE VIEW votos_municipio_candidato AS
 SELECT v.uf, v.cargo, v.nivel, v.cod_tse, v.cod_zona, v.nome AS municipio, v.pst, v.hg, v.tf,
@@ -208,7 +263,7 @@ SELECT v.uf, v.cargo, v.nivel, v.cod_tse, v.cod_zona, v.nome AS municipio, v.pst
        c->>'pvap' AS pct_validos, c->>'st' AS situacao, v.atualizado_em
 FROM votos_municipio v, jsonb_array_elements(v.payload->'cand') AS c;
 
--- Totais por partido por cidade (nominais + legenda), tambem do jsonb.
+-- Totais por partido por lugar (nominais + legenda), tambem do jsonb.
 DROP VIEW IF EXISTS votos_municipio_partido;
 CREATE VIEW votos_municipio_partido AS
 SELECT v.uf, v.cargo, v.nivel, v.cod_tse, v.cod_zona, v.nome AS municipio, v.pst, v.hg,
@@ -218,6 +273,27 @@ SELECT v.uf, v.cargo, v.nivel, v.cod_tse, v.cod_zona, v.nome AS municipio, v.pst
        NULLIF(regexp_replace(p->>'tvan', '\\D', '', 'g'), '')::BIGINT AS total,
        v.atualizado_em
 FROM votos_municipio v, jsonb_array_elements(v.payload->'partidos') AS p;
+
+-- Totais da corrida em cada lugar: secoes, eleitorado, comparecimento,
+-- abstencao, validos, brancos, nulos (blocos s/e/v do arquivo do TSE).
+DROP VIEW IF EXISTS votos_municipio_totais;
+CREATE VIEW votos_municipio_totais AS
+SELECT v.uf, v.cargo, v.nivel, v.cod_tse, v.cod_zona, v.nome AS municipio, v.pst, v.hg, v.tf,
+       NULLIF(regexp_replace(v.payload->'totais'->'s'->>'ts', '\\D', '', 'g'), '')::BIGINT AS secoes,
+       NULLIF(regexp_replace(v.payload->'totais'->'s'->>'st', '\\D', '', 'g'), '')::BIGINT AS secoes_totalizadas,
+       NULLIF(regexp_replace(v.payload->'totais'->'e'->>'te', '\\D', '', 'g'), '')::BIGINT AS eleitores_aptos,
+       NULLIF(regexp_replace(v.payload->'totais'->'e'->>'c',  '\\D', '', 'g'), '')::BIGINT AS comparecimento,
+       NULLIF(regexp_replace(v.payload->'totais'->'e'->>'a',  '\\D', '', 'g'), '')::BIGINT AS abstencao,
+       v.payload->'totais'->'e'->>'pa' AS pct_abstencao,
+       NULLIF(regexp_replace(v.payload->'totais'->'v'->>'tv', '\\D', '', 'g'), '')::BIGINT AS total_votos,
+       NULLIF(regexp_replace(v.payload->'totais'->'v'->>'vv', '\\D', '', 'g'), '')::BIGINT AS validos,
+       NULLIF(regexp_replace(v.payload->'totais'->'v'->>'vnom', '\\D', '', 'g'), '')::BIGINT AS nominais,
+       NULLIF(regexp_replace(v.payload->'totais'->'v'->>'vb', '\\D', '', 'g'), '')::BIGINT AS brancos,
+       v.payload->'totais'->'v'->>'pvb' AS pct_brancos,
+       NULLIF(regexp_replace(v.payload->'totais'->'v'->>'tvn', '\\D', '', 'g'), '')::BIGINT AS nulos,
+       v.payload->'totais'->'v'->>'ptvn' AS pct_nulos,
+       v.atualizado_em
+FROM votos_municipio v;
 """
 
 
@@ -246,19 +322,22 @@ async def gravar_municipios(pool: asyncpg.Pool, uf: str, lista: list[dict]) -> N
         )
 
 
-async def carregar_etags(pool: asyncpg.Pool, uf: str) -> dict[tuple[str, str], str]:
-    """Etags ja gravadas: depois de um restart, nao baixa de novo o que nao mudou."""
+async def carregar_etags(pool: asyncpg.Pool) -> dict[tuple[str, str, str, str], str]:
+    """
+    Etags ja gravadas: depois de um restart, nao baixa de novo o que nao mudou.
+    So valem linhas ja no formato atual (com `totais`): linha antiga precisa
+    ser rebaixada uma vez para ganhar os blocos novos.
+    """
     async with pool.acquire() as con:
         rows = await con.fetch(
-            "SELECT cargo, cod_tse, cod_zona, etag FROM votos_municipio WHERE uf = $1 AND etag IS NOT NULL", uf
+            "SELECT uf, cargo, cod_tse, cod_zona, etag FROM votos_municipio "
+            "WHERE etag IS NOT NULL AND payload ? 'totais'"
         )
-    return {(r["cargo"], r["cod_tse"], r["cod_zona"]): r["etag"] for r in rows}
+    return {(r["uf"], r["cargo"], r["cod_tse"], r["cod_zona"]): r["etag"] for r in rows}
 
 
-async def gravar_boletim(pool: asyncpg.Pool, uf: str, cargo: str, mun: dict, flat: dict,
-                         etag: Optional[str], zona: str = "") -> None:
-    enx = enxugar(flat)
-    nivel = "zona" if zona else "municipio"
+async def gravar_boletim(pool: asyncpg.Pool, t: dict, flat: dict, bruto: dict, etag: Optional[str]) -> None:
+    enx = enxugar(flat, bruto)
     pst = _num(flat.get("pst"))
     validos, nominais = _int(flat.get("vv")), _int(flat.get("vnom"))
     async with pool.acquire() as con:
@@ -270,31 +349,31 @@ async def gravar_boletim(pool: asyncpg.Pool, uf: str, cargo: str, mun: dict, fla
                      validos, nominais, etag, payload, atualizado_em)
                 VALUES ($1,$2,$3,$15,$16,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,NOW())
                 ON CONFLICT (uf, cargo, cod_tse, cod_zona) DO UPDATE SET
-                    nome = EXCLUDED.nome, dg = EXCLUDED.dg, hg = EXCLUDED.hg, tf = EXCLUDED.tf,
+                    nivel = EXCLUDED.nivel, nome = EXCLUDED.nome, dg = EXCLUDED.dg, hg = EXCLUDED.hg, tf = EXCLUDED.tf,
                     pst = EXCLUDED.pst, eleitores = EXCLUDED.eleitores, total_votos = EXCLUDED.total_votos,
                     validos = EXCLUDED.validos, nominais = EXCLUDED.nominais, etag = EXCLUDED.etag,
                     payload = EXCLUDED.payload, atualizado_em = NOW()
                 """,
-                uf, cargo, mun["cod"], mun["nome"], flat.get("dg"), flat.get("hg"), flat.get("tf"),
-                pst, _int(flat.get("e")), _int(flat.get("v")), validos, nominais, etag,
-                json.dumps(enx, ensure_ascii=False), nivel, zona,
+                t["uf"], t["cargo"], t["cod"], t["nome"], flat.get("dg"), flat.get("hg"), flat.get("tf"),
+                pst, _int(flat.get("e")), _int(flat.get("tv")), validos, nominais, etag,
+                json.dumps(enx, ensure_ascii=False), t["nivel"], t["zona"],
             )
             await con.execute(
                 """
                 INSERT INTO votos_municipio_hist (uf, cargo, cod_tse, cod_zona, hg, pst, validos, nominais)
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                 """,
-                uf, cargo, mun["cod"], zona, flat.get("hg"), pst, validos, nominais,
+                t["uf"], t["cargo"], t["cod"], t["zona"], flat.get("hg"), pst, validos, nominais,
             )
 
 
 # ------------------------------------------------------------- coleta
 
 async def coletar_um(client: httpx.AsyncClient, pool: asyncpg.Pool, sem: asyncio.Semaphore,
-                     etags: dict, mun: dict, cargo: str, zona: str = "") -> str:
+                     etags: dict, t: dict) -> str:
     """Devolve 'novo' | 'igual' | 'vazio' | 'erro'."""
-    chave = (cargo, mun["cod"], zona)
-    url = url_municipio(TSE_BASE_URL, ELE, UF, mun["cod"], cargo, zona)
+    chave = (t["uf"], t["cargo"], t["cod"], t["zona"])
+    url = url_da(TSE_BASE_URL, t)
     headers = dict(HEADERS)
     if chave in etags:
         headers["If-None-Match"] = etags[chave]
@@ -304,24 +383,26 @@ async def coletar_um(client: httpx.AsyncClient, pool: asyncpg.Pool, sem: asyncio
             if r.status_code == 304:
                 return "igual"
             r.raise_for_status()
-            flat = achatar(r.json())
+            bruto = r.json()
+            flat = achatar(bruto)
             if not tem_dado(flat):
                 return "vazio"
             etag = r.headers.get("etag")
-            await gravar_boletim(pool, UF, cargo, mun, flat, etag, zona)
+            await gravar_boletim(pool, t, flat, bruto, etag)
             if etag:
                 etags[chave] = etag
             return "novo"
-        except Exception as e:  # noqa: BLE001 — um municipio com erro nao derruba o ciclo
-            print(f"[municipios] erro {cargo} {mun['cod']}{'-z' + zona if zona else ''} {mun['nome']}: {e}", file=sys.stderr)
+        except Exception as e:  # noqa: BLE001 — um lugar com erro nao derruba o ciclo
+            print(f"[municipios] erro {t['nivel']} {t['cargo']} {t['uf']}{t['cod']}"
+                  f"{'-z' + t['zona'] if t['zona'] else ''} {t['nome']}: {e}", file=sys.stderr)
             return "erro"
 
 
 async def ciclo(client: httpx.AsyncClient, pool: asyncpg.Pool, redis: aioredis.Redis,
-                municipios: list[dict], etags: dict) -> None:
+                tarefas_lista: list[dict], etags: dict) -> None:
     inicio = time.monotonic()
     sem = asyncio.Semaphore(CONCORRENCIA)
-    tarefas = [coletar_um(client, pool, sem, etags, m, c, z) for (m, c, z) in tarefas_de(municipios, CARGOS, NIVEIS)]
+    tarefas = [coletar_um(client, pool, sem, etags, t) for t in tarefas_lista]
     resultados = await asyncio.gather(*tarefas)
     contagem = {k: resultados.count(k) for k in ("novo", "igual", "vazio", "erro")}
     try:
@@ -348,19 +429,22 @@ async def main() -> None:
     async with httpx.AsyncClient(limits=limites, http2=False) as client:
         r = await client.get(url_config(TSE_BASE_URL, ELE), headers=HEADERS, timeout=30)
         r.raise_for_status()
-        municipios = municipios_da_uf(r.json(), UF)
+        cm = r.json()
+        municipios = municipios_da_uf(cm, UF)
         if not municipios:
             print(f"[municipios] nenhum municipio para a UF {UF!r} no config do TSE", file=sys.stderr)
             sys.exit(1)
+        ufs = ufs_do_config(cm)
         await gravar_municipios(pool, UF, municipios)
-        etags = await carregar_etags(pool, UF)
+        etags = await carregar_etags(pool)
+        tarefas_lista = tarefas_de(municipios, CARGOS, NIVEIS, UF, ufs, ELE, ELE_BR)
         zonas = sum(len(m["zonas"]) for m in municipios)
-        print(f"[municipios] {len(municipios)} municipios ({zonas} zonas) de {UF.upper()} x {len(CARGOS)} cargos, "
-              f"niveis={','.join(NIVEIS)}, a cada {INTERVALO}s, {CONCORRENCIA} em paralelo; "
-              f"{len(etags)} etags reaproveitadas")
+        print(f"[municipios] {len(municipios)} municipios ({zonas} zonas) de {UF.upper()}, {len(ufs)} UFs, "
+              f"cargos={','.join(CARGOS)}, niveis={','.join(NIVEIS)} -> {len(tarefas_lista)} arquivos/ciclo, "
+              f"a cada {INTERVALO}s, {CONCORRENCIA} em paralelo; {len(etags)} etags reaproveitadas")
 
         while True:
-            await ciclo(client, pool, redis, municipios, etags)
+            await ciclo(client, pool, redis, tarefas_lista, etags)
             await asyncio.sleep(INTERVALO)
 
 

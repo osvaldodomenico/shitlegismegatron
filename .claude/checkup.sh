@@ -161,12 +161,14 @@ else
 
     # Coletor por municipio: heartbeat no Redis (expira em 3 ciclos) e as
     # 645 cidades de SP presentes em votos_municipio para cada cargo.
-    # Niveis: municipio (645 cidades) e zona (779 pares zona x cidade), x 4 cargos.
+    # Niveis: municipio (645) e zona (779) x 5 cargos; uf (presidente nas 27 UFs + 4 cargos de SP); br.
     mun="$(ssh -o ConnectTimeout=10 vps2 'docker exec megatron-redis-1 redis-cli get megatron:heartbeat:municipios; docker exec megatron-timescaledb-1 psql -U megatron -d megatron -tAc "select nivel || chr(61) || count(distinct cargo) || chr(120) || min(c) from (select nivel, cargo, count(*) c from votos_municipio group by 1,2) t group by nivel order by nivel"' 2>/dev/null)"
     if printf '%s' "$mun" | head -1 | grep -q '"ts"' \
-       && printf '%s' "$mun" | grep -q '^municipio=4x645$' \
-       && printf '%s' "$mun" | grep -q '^zona=4x779$'; then
-        pass "coletor de municipios vivo — 645 cidades e 779 zonas x 4 cargos no banco"
+       && printf '%s' "$mun" | grep -q '^municipio=5x645$' \
+       && printf '%s' "$mun" | grep -q '^zona=5x779$' \
+       && printf '%s' "$mun" | grep -q '^uf=5x1$' \
+       && printf '%s' "$mun" | grep -q '^br=1x1$'; then
+        pass "coletor territorial vivo — 645 cidades e 779 zonas x 5 cargos, 27 UFs e BR no banco"
     else
         fail "coletor de municipios parado ou incompleto ($(printf '%s' "$mun" | tail -2 | tr '\n' ' '))"
     fi
