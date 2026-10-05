@@ -173,6 +173,32 @@ services:
         condition: service_healthy
     networks: [megatron_net]
 
+  # Carregador dos boletins de urna (bu.dat -> urna_votos/urna_bu), em lotes de
+  # 500 secoes, validando: consistencia interna de cada secao e, por cidade x
+  # cargo, soma das secoes x boletim da cidade (urna_validacao). Views
+  # votos_por_local (escola) e votos_por_bairro.
+  collector_bu:
+    <<: *logging
+    build: ./collector
+    command: ["python", "bu_loader.py"]
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      PYTHONUNBUFFERED: "1"
+      REDIS_URL: ${REDIS_URL}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
+      URNA_UFS: ${URNA_UFS:-sp}
+      BU_LOTE: ${BU_LOTE:-500}
+      BU_INTERVAL_SECONDS: ${BU_INTERVAL_SECONDS:-600}
+    volumes:
+      - ./dados/urnas:/dados/urnas:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    networks: [megatron_net]
+
   api:
     <<: *logging
     build: ./api
