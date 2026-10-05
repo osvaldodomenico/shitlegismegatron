@@ -9,10 +9,13 @@ decodifica (bu.py) e grava:
   urna_votos  -> uma linha por (secao, eleicao, cargo, tipo de voto, partido,
                  numero): os votos. E daqui que saem escola e bairro, via
                  locais_votacao.
-  urna_validacao -> por cidade e cargo: soma dos votos nominais das secoes
-                 carregadas x total nominal do boletim da cidade (TSE,
-                 votos_municipio). Quando todas as secoes da cidade estao
-                 carregadas e o boletim da cidade esta em 100%, tem que bater.
+  urna_validacao -> por cidade e cargo, CANDIDATO A CANDIDATO: soma dos votos
+                 das secoes carregadas x votos do candidato no boletim da
+                 cidade (TSE, votos_municipio). Quando todas as secoes da
+                 cidade estao carregadas e o boletim esta em 100%, cada
+                 candidato tem que bater. Votos da urna a numeros que NAO
+                 estao na lista do TSE (registro cancelado; o TSE conta como
+                 nulo) ficam em `votos_fora_lista`, nao contam como divergencia.
 
 Lotes de BU_LOTE secoes por transacao; o que falhar na decodificacao fica
 marcado em urna_secao.bu_erro e nao trava o resto. Reprocessa uma secao se
@@ -87,6 +90,10 @@ CREATE TABLE IF NOT EXISTS urna_validacao (
     validado_em   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (uf, cod_mun, cargo)
 );
+ALTER TABLE urna_validacao ADD COLUMN IF NOT EXISTS candidatos INT;            -- na lista do TSE
+ALTER TABLE urna_validacao ADD COLUMN IF NOT EXISTS candidatos_divergentes INT;
+ALTER TABLE urna_validacao ADD COLUMN IF NOT EXISTS votos_fora_lista BIGINT;   -- numeros sem candidato
+ALTER TABLE urna_validacao ADD COLUMN IF NOT EXISTS divergencias JSONB;        -- [{numero, bu, tse}]
 
 -- Votos por candidato por ESCOLA (local de votacao) e por BAIRRO.
 DROP VIEW IF EXISTS votos_por_local;
@@ -182,33 +189,67 @@ async def carregar_lote(pool: asyncpg.Pool, uf: str, linhas: list[asyncpg.Record
 
 async def validar(pool: asyncpg.Pool, uf: str) -> dict:
     """
-    Cidade x cargo: nominais somados das secoes carregadas x nominais do
-    boletim da cidade (TSE). 'ok' quando todas as secoes do cadastro estao
-    carregadas, a cidade esta em 100% e a diferenca e zero; 'incompleto'
+    Cidade x cargo, candidato a candidato. 'ok' = todas as secoes do cadastro
+    carregadas, cidade em 100% e nenhum candidato divergente; 'incompleto'
     enquanto faltam secoes ou o boletim da cidade nao fechou; 'DIVERGE' se
-    tudo esta completo e ainda assim nao bate.
+    completo e algum candidato nao bate. Votos a numeros fora da lista do
+    TSE sao informados a parte.
     """
     async with pool.acquire() as con:
         await con.execute(
             """
-            INSERT INTO urna_validacao (uf, cod_mun, cargo, secoes_cadastro, secoes_bu, pst_cidade,
-                                        nominais_bu, nominais_tse, diferenca, status, validado_em)
-            SELECT c.uf, c.cod_mun, c.cargo, c.secoes_cadastro, b.secoes_bu, m.pst,
-                   b.nominais_bu, m.nominais, b.nominais_bu - m.nominais,
-                   CASE WHEN b.secoes_bu >= c.secoes_cadastro AND m.pst >= 100 AND b.nominais_bu = m.nominais THEN 'ok'
-                        WHEN b.secoes_bu >= c.secoes_cadastro AND m.pst >= 100 THEN 'DIVERGE'
-                        ELSE 'incompleto' END,
-                   NOW()
-            FROM (SELECT $1::text AS uf, l.cd_municipio AS cod_mun, x.cargo, COUNT(*) AS secoes_cadastro
-                  FROM locais_votacao l CROSS JOIN (VALUES ('presidente'),('governador'),('senador'),('dep_federal'),('dep_estadual')) AS x(cargo)
-                  WHERE upper(l.sg_uf) = upper($1) GROUP BY 1,2,3) c
-            JOIN (SELECT uf, cod_mun, cargo, COUNT(DISTINCT (zona, secao)) AS secoes_bu,
-                         SUM(votos) FILTER (WHERE tipo = 'nominal') AS nominais_bu
-                  FROM urna_votos WHERE uf = $1 GROUP BY 1,2,3) b USING (uf, cod_mun, cargo)
-            LEFT JOIN votos_municipio m ON m.uf = $1 AND m.nivel = 'municipio' AND m.cod_tse = c.cod_mun AND m.cargo = c.cargo
+            WITH cad AS (
+                SELECT l.cd_municipio AS cod_mun, x.cargo, COUNT(*) AS secoes_cadastro
+                FROM locais_votacao l
+                CROSS JOIN (VALUES ('presidente'),('governador'),('senador'),('dep_federal'),('dep_estadual')) AS x(cargo)
+                WHERE upper(l.sg_uf) = upper($1) GROUP BY 1, 2
+            ),
+            bu AS (
+                SELECT cod_mun, cargo, codigo, SUM(votos) AS v
+                FROM urna_votos WHERE uf = $1 AND tipo = 'nominal' GROUP BY 1, 2, 3
+            ),
+            bu_sec AS (
+                SELECT cod_mun, cargo, COUNT(DISTINCT (zona, secao)) AS secoes_bu
+                FROM urna_votos WHERE uf = $1 GROUP BY 1, 2
+            ),
+            tse AS (
+                SELECT m.cod_tse AS cod_mun, m.cargo, m.pst, (c->>'n')::INT AS codigo,
+                       COALESCE(NULLIF(regexp_replace(c->>'vap', '\\D', '', 'g'), '')::BIGINT, 0) AS v
+                FROM votos_municipio m, jsonb_array_elements(m.payload->'cand') c
+                WHERE m.uf = $1 AND m.nivel = 'municipio'
+            ),
+            cmp AS (
+                SELECT COALESCE(bu.cod_mun, tse.cod_mun) AS cod_mun, COALESCE(bu.cargo, tse.cargo) AS cargo,
+                       COALESCE(bu.codigo, tse.codigo) AS codigo, bu.v AS v_bu, tse.v AS v_tse
+                FROM bu FULL JOIN tse ON tse.cod_mun = bu.cod_mun AND tse.cargo = bu.cargo AND tse.codigo = bu.codigo
+            ),
+            agg AS (
+                SELECT cod_mun, cargo,
+                       COUNT(*) FILTER (WHERE v_tse IS NOT NULL) AS candidatos,
+                       COUNT(*) FILTER (WHERE v_tse IS NOT NULL AND COALESCE(v_bu, 0) <> v_tse) AS candidatos_divergentes,
+                       COALESCE(SUM(v_bu) FILTER (WHERE v_tse IS NULL), 0) AS votos_fora_lista,
+                       COALESCE(SUM(v_bu) FILTER (WHERE v_tse IS NOT NULL), 0) AS nominais_bu,
+                       COALESCE(SUM(v_tse), 0) AS nominais_tse,
+                       COALESCE(jsonb_agg(jsonb_build_object('numero', codigo, 'bu', v_bu, 'tse', v_tse) ORDER BY codigo)
+                                FILTER (WHERE v_tse IS NOT NULL AND COALESCE(v_bu, 0) <> v_tse), '[]'::jsonb) AS divergencias
+                FROM cmp WHERE v_bu IS NOT NULL OR v_tse IS NOT NULL GROUP BY 1, 2
+            )
+            INSERT INTO urna_validacao (uf, cod_mun, cargo, secoes_cadastro, secoes_bu, pst_cidade, nominais_bu, nominais_tse,
+                                        diferenca, candidatos, candidatos_divergentes, votos_fora_lista, divergencias, status, validado_em)
+            SELECT $1, a.cod_mun, a.cargo, c.secoes_cadastro, s.secoes_bu, p.pst, a.nominais_bu, a.nominais_tse,
+                   a.nominais_bu - a.nominais_tse, a.candidatos, a.candidatos_divergentes, a.votos_fora_lista, a.divergencias,
+                   CASE WHEN s.secoes_bu >= c.secoes_cadastro AND p.pst >= 100 AND a.candidatos_divergentes = 0 THEN 'ok'
+                        WHEN s.secoes_bu >= c.secoes_cadastro AND p.pst >= 100 THEN 'DIVERGE'
+                        ELSE 'incompleto' END, NOW()
+            FROM agg a
+            JOIN cad c USING (cod_mun, cargo)
+            JOIN bu_sec s USING (cod_mun, cargo)
+            LEFT JOIN (SELECT DISTINCT cod_mun, cargo, pst FROM tse) p USING (cod_mun, cargo)
             ON CONFLICT (uf, cod_mun, cargo) DO UPDATE SET
               secoes_cadastro=EXCLUDED.secoes_cadastro, secoes_bu=EXCLUDED.secoes_bu, pst_cidade=EXCLUDED.pst_cidade,
               nominais_bu=EXCLUDED.nominais_bu, nominais_tse=EXCLUDED.nominais_tse, diferenca=EXCLUDED.diferenca,
+              candidatos=EXCLUDED.candidatos, candidatos_divergentes=EXCLUDED.candidatos_divergentes,
+              votos_fora_lista=EXCLUDED.votos_fora_lista, divergencias=EXCLUDED.divergencias,
               status=EXCLUDED.status, validado_em=NOW()
             """, uf)
         rows = await con.fetch("SELECT status, COUNT(*) n FROM urna_validacao WHERE uf=$1 GROUP BY 1", uf)
@@ -238,6 +279,8 @@ async def main() -> None:
                 except Exception:  # noqa: BLE001
                     pass
                 print(f"[bu] lote {len(lote)} secoes | {c} | acumulado {total} | {time.monotonic() - inicio:.0f}s")
+                if (total["ok"] + total["inconsistente"]) % (LOTE * 10) == 0:   # a cada 10 lotes
+                    print(f"[bu] validacao parcial {uf.upper()}: {await validar(pool, uf)}")
             val = await validar(pool, uf)
             print(f"[bu] validacao {uf.upper()} por cidade x cargo: {val}")
         try:
