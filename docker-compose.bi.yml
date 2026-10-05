@@ -124,7 +124,7 @@ services:
       TSE_PATH_DADOS: ${TSE_PATH_DADOS:-dados}
       TSE_SUFIXO: ${TSE_SUFIXO:-u}
       REDIS_URL: ${REDIS_URL}
-      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB_COLETA:-${POSTGRES_DB}}
       ELE_1T: ${ELE_1T}
       ELE_1T_BR: ${ELE_1T_BR:-}
       MUN_UF: ${MUN_UF:-sp}
@@ -159,7 +159,7 @@ services:
       PYTHONUNBUFFERED: "1"
       TSE_BASE_URL: ${TSE_BASE_URL}
       REDIS_URL: ${REDIS_URL}
-      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB_COLETA:-${POSTGRES_DB}}
       URNA_PLEITO: ${URNA_PLEITO:-3220}
       URNA_UFS: ${URNA_UFS:-sp}
       URNA_DIR: /dados/urnas
@@ -167,7 +167,7 @@ services:
       URNA_INTERVAL_SECONDS: ${URNA_INTERVAL_SECONDS:-1800}
       URNA_FASES: ${URNA_FASES:-bu|rdv,vota,log|imgbu}
     volumes:
-      - ./dados/urnas:/dados/urnas
+      - ./dados/${URNA_SUBDIR:-urnas}:/dados/urnas
     depends_on:
       redis:
         condition: service_healthy
@@ -188,12 +188,12 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: ${REDIS_URL}
-      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB_COLETA:-${POSTGRES_DB}}
       URNA_UFS: ${URNA_UFS:-sp}
       BU_LOTE: ${BU_LOTE:-500}
       BU_INTERVAL_SECONDS: ${BU_INTERVAL_SECONDS:-600}
     volumes:
-      - ./dados/urnas:/dados/urnas:ro
+      - ./dados/${URNA_SUBDIR:-urnas}:/dados/urnas:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -214,7 +214,7 @@ services:
     environment:
       PYTHONUNBUFFERED: "1"
       REDIS_URL: ${REDIS_URL}
-      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB_COLETA:-${POSTGRES_DB}}
       BI_DB_HOST: ${BI_DB_HOST:-shiftworks_mysql_shiftbi}
       BI_DB_USER: ${BI_DB_USER:-root}
       BI_DB_PASS: ${BI_DB_PASS}
@@ -222,6 +222,11 @@ services:
       BI_UF: ${BI_UF:-sp}
       BI_INTERVAL_SECONDS: ${BI_INTERVAL_SECONDS:-900}
       BI_DIR_TSE: /dados/tse
+      # 2o turno: ver o bloco "2o TURNO" no .env.example. Padrao = 1o turno.
+      BI_TURNO: ${BI_TURNO:-1}
+      BI_DATA: ${BI_DATA:-2026-10-04}
+      BI_ELE_BR: ${BI_ELE_BR:-6257}
+      BI_ETAPAS: ${BI_ETAPAS:-locais,candidatos,bens,lugares,perfil,receitas,despesas,secoes}
     volumes:
       - ./dados/tse:/dados/tse
     depends_on:

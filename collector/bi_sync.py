@@ -48,9 +48,11 @@ BI = dict(host=os.environ.get("BI_DB_HOST", "shiftworks_mysql_shiftbi"), port=in
           database=os.environ.get("BI_DB_NAME", "shiftBI"), charset="utf8mb4", autocommit=False)
 UF = os.environ.get("BI_UF", "sp").lower()
 ANO = 2026
-DATA = "2026-10-04"
+# 2o turno (25/10): BI_TURNO=2, BI_DATA=2026-10-25, BI_ELE_BR=6258, BI_ETAPAS=lugares,secoes e um
+# POSTGRES_URL de base propria (ver docker-compose.t2.yml) -- a base do 1o turno nao e tocada.
+DATA = os.environ.get("BI_DATA", "2026-10-04")
 TIPO = "eleicao ordinaria"
-TURNO = 1
+TURNO = int(os.environ.get("BI_TURNO", "1"))
 DIR_TSE = Path(os.environ.get("BI_DIR_TSE", "/dados/tse"))
 CDN = "https://cdn.tse.jus.br/estatistica/sead/odsele"
 INTERVALO = int(os.environ.get("BI_INTERVAL_SECONDS", "900"))
@@ -72,7 +74,8 @@ AGG_PENDENTE = "megatron:bi:agg_pendente"
 
 CARGO_BI = {"presidente": "presidente", "governador": "governador", "senador": "senador",
             "dep_federal": "deputado federal", "dep_estadual": "deputado estadual"}
-ELE = {"presidente": "6257"}          # demais cargos: 6259
+ELE = {"presidente": os.environ.get("BI_ELE_BR", "6257")}   # demais cargos: BI_ELE_UF
+ELE_UF = os.environ.get("BI_ELE_UF", "6259")
 
 NULOS = {"#NULO", "#NULO#", "#NE", "NÃO DIVULGÁVEL", "NAO DIVULGAVEL", "-1", "-3", "-4", ""}
 
@@ -135,7 +138,7 @@ def pct(a, b) -> float:
 
 
 def ele_de(cargo: str) -> str:
-    return ELE.get(cargo, "6259")
+    return ELE.get(cargo, ELE_UF)
 
 
 def idade_em(nasc: str | None) -> int | None:
@@ -172,8 +175,15 @@ def bi_inserir_fluxo(con, tabela: str, colunas: list[str], gerador, bloco: int =
     return total + bi_inserir(con, tabela, colunas, buf)
 
 
+# Tabelas de resultado guardam os dois turnos lado a lado: apagar sem turno levaria o outro junto.
+TABELAS_COM_TURNO = ("resultados_candidato_municipio", "resultados_partido_municipio", "detalhes_votacao_municipio",
+                     "resultados_candidato_secao", "resultados_partido_secao", "detalhes_votacao_secao")
+
+
 def bi_apagar(con, sql: str, args: tuple) -> int:
     assert "ano = 2026" in sql or "ano=2026" in sql, "todo DELETE no BI precisa filtrar ano = 2026"
+    tabela = sql.split()[2]
+    assert not tabela.startswith(TABELAS_COM_TURNO) or "turno = %s" in sql, f"DELETE em {tabela} precisa filtrar turno"
     with con.cursor() as cur:
         return cur.execute(sql, args)
 
@@ -486,8 +496,8 @@ async def etapa_lugares(pg, con, ibge) -> int:
                        inteiro(e.get("est")), inteiro(s.get("st")), comp, inteiro(e.get("a")), vv, vb, vn,
                        inteiro(v.get("vnom")), leg, pct(comp, aptos), pct(vv, tot), pct(vb, tot), pct(vn, tot), None)]
         suf = "_zona" if zona else ""
-        filtro = "ano = 2026 AND sigla_uf = %s AND cargo = %s AND id_municipio_tse = %s" + (" AND zona = %s" if zona else "")
-        args = (sg, cargo, mun, *z)
+        filtro = "ano = 2026 AND turno = %s AND sigla_uf = %s AND cargo = %s AND id_municipio_tse = %s" + (" AND zona = %s" if zona else "")
+        args = (TURNO, sg, cargo, mun, *z)
         cz = COLS_RCM + (["zona"] if zona else [])
         bi_apagar(con, f"DELETE FROM resultados_candidato_municipio{suf} WHERE {filtro}", args)
         bi_apagar(con, f"DELETE FROM resultados_partido_municipio{suf} WHERE {filtro}", args)
@@ -621,8 +631,8 @@ async def etapa_secoes(pg, con, ibge) -> int:
         for (mun_g, zona_g), secoes_g in grupos.items():
             marc = ",".join(["%s"] * len(secoes_g))
             for t in ("resultados_candidato_secao", "resultados_partido_secao", "detalhes_votacao_secao"):
-                bi_apagar(con, f"DELETE FROM {t} WHERE ano = 2026 AND sigla_uf = %s AND id_municipio_tse = %s "
-                               f"AND zona = %s AND secao IN ({marc})", (sg, mun_g, zona_g, *secoes_g))
+                bi_apagar(con, f"DELETE FROM {t} WHERE ano = 2026 AND turno = %s AND sigla_uf = %s AND id_municipio_tse = %s "
+                               f"AND zona = %s AND secao IN ({marc})", (TURNO, sg, mun_g, zona_g, *secoes_g))
         base = ["ano", "turno", "id_eleicao", "tipo_eleicao", "data_eleicao", "sigla_uf", "id_municipio", "id_municipio_tse", "zona", "secao", "cargo"]
         n = bi_inserir(con, "resultados_candidato_secao", base + ["numero_partido", "sigla_partido", "titulo_eleitoral_candidato",
                        "sequencial_candidato", "numero_candidato", "votos"], rcs)
