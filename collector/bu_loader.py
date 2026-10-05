@@ -94,6 +94,7 @@ ALTER TABLE urna_validacao ADD COLUMN IF NOT EXISTS candidatos INT;            -
 ALTER TABLE urna_validacao ADD COLUMN IF NOT EXISTS candidatos_divergentes INT;
 ALTER TABLE urna_validacao ADD COLUMN IF NOT EXISTS votos_fora_lista BIGINT;   -- numeros sem candidato
 ALTER TABLE urna_validacao ADD COLUMN IF NOT EXISTS divergencias JSONB;        -- [{numero, bu, tse}]
+ALTER TABLE urna_validacao ADD COLUMN IF NOT EXISTS secoes_sem_urna INT;       -- principais sem BU na CDN do TSE
 
 -- Votos por candidato por ESCOLA (local de votacao) e por BAIRRO.
 DROP VIEW IF EXISTS votos_por_local;
@@ -199,10 +200,17 @@ async def validar(pool: asyncpg.Pool, uf: str) -> dict:
         await con.execute(
             """
             WITH cad AS (
+                -- so secoes PRINCIPAIS: a agregada vota na urna da principal e nao tem BU proprio
                 SELECT l.cd_municipio AS cod_mun, x.cargo, COUNT(*) AS secoes_cadastro
                 FROM locais_votacao l
                 CROSS JOIN (VALUES ('presidente'),('governador'),('senador'),('dep_federal'),('dep_estadual')) AS x(cargo)
-                WHERE upper(l.sg_uf) = upper($1) GROUP BY 1, 2
+                WHERE upper(l.sg_uf) = upper($1) AND l.cd_tipo_secao_agregada = 1 GROUP BY 1, 2
+            ),
+            sem AS (
+                SELECT u.cod_mun, COUNT(*) AS secoes_sem_urna
+                FROM urna_secao u JOIN locais_votacao l
+                  ON upper(l.sg_uf) = upper(u.uf) AND l.cd_municipio = u.cod_mun AND l.nr_zona = u.zona AND l.nr_secao = u.secao
+                WHERE u.uf = $1 AND u.sem_urna AND l.cd_tipo_secao_agregada = 1 GROUP BY 1
             ),
             bu AS (
                 SELECT cod_mun, cargo, codigo, SUM(votos) AS v
@@ -235,22 +243,27 @@ async def validar(pool: asyncpg.Pool, uf: str) -> dict:
                 FROM cmp WHERE v_bu IS NOT NULL OR v_tse IS NOT NULL GROUP BY 1, 2
             )
             INSERT INTO urna_validacao (uf, cod_mun, cargo, secoes_cadastro, secoes_bu, pst_cidade, nominais_bu, nominais_tse,
-                                        diferenca, candidatos, candidatos_divergentes, votos_fora_lista, divergencias, status, validado_em)
+                                        diferenca, candidatos, candidatos_divergentes, votos_fora_lista, divergencias,
+                                        secoes_sem_urna, status, validado_em)
             SELECT $1, a.cod_mun, a.cargo, c.secoes_cadastro, s.secoes_bu, p.pst, a.nominais_bu, a.nominais_tse,
                    a.nominais_bu - a.nominais_tse, a.candidatos, a.candidatos_divergentes, a.votos_fora_lista, a.divergencias,
+                   COALESCE(x.secoes_sem_urna, 0),
                    CASE WHEN s.secoes_bu >= c.secoes_cadastro AND p.pst >= 100 AND a.candidatos_divergentes = 0 THEN 'ok'
                         WHEN s.secoes_bu >= c.secoes_cadastro AND p.pst >= 100 THEN 'DIVERGE'
+                        -- tudo que a CDN publicou foi carregado; o que falta o TSE nao publicou (bu ausente)
+                        WHEN s.secoes_bu + COALESCE(x.secoes_sem_urna, 0) >= c.secoes_cadastro AND p.pst >= 100 THEN 'faltam_no_tse'
                         ELSE 'incompleto' END, NOW()
             FROM agg a
             JOIN cad c USING (cod_mun, cargo)
             JOIN bu_sec s USING (cod_mun, cargo)
+            LEFT JOIN sem x USING (cod_mun)
             LEFT JOIN (SELECT DISTINCT cod_mun, cargo, pst FROM tse) p USING (cod_mun, cargo)
             ON CONFLICT (uf, cod_mun, cargo) DO UPDATE SET
               secoes_cadastro=EXCLUDED.secoes_cadastro, secoes_bu=EXCLUDED.secoes_bu, pst_cidade=EXCLUDED.pst_cidade,
               nominais_bu=EXCLUDED.nominais_bu, nominais_tse=EXCLUDED.nominais_tse, diferenca=EXCLUDED.diferenca,
               candidatos=EXCLUDED.candidatos, candidatos_divergentes=EXCLUDED.candidatos_divergentes,
               votos_fora_lista=EXCLUDED.votos_fora_lista, divergencias=EXCLUDED.divergencias,
-              status=EXCLUDED.status, validado_em=NOW()
+              secoes_sem_urna=EXCLUDED.secoes_sem_urna, status=EXCLUDED.status, validado_em=NOW()
             """, uf)
         rows = await con.fetch("SELECT status, COUNT(*) n FROM urna_validacao WHERE uf=$1 GROUP BY 1", uf)
     return {r["status"]: r["n"] for r in rows}

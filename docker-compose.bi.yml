@@ -152,7 +152,9 @@ services:
     build: ./collector
     command: ["python", "urnas.py"]
     restart: unless-stopped
-    mem_limit: 256m
+    # 512m: o estado das 104 mil secoes + 16 downloads em paralelo passava de
+    # 256m (OOM 11x em 05/10 de madrugada). Estado enxuto + folga.
+    mem_limit: 512m
     environment:
       PYTHONUNBUFFERED: "1"
       TSE_BASE_URL: ${TSE_BASE_URL}
@@ -163,7 +165,7 @@ services:
       URNA_DIR: /dados/urnas
       URNA_CONCURRENCY: ${URNA_CONCURRENCY:-16}
       URNA_INTERVAL_SECONDS: ${URNA_INTERVAL_SECONDS:-1800}
-      URNA_FASES: ${URNA_FASES:-bu,imgbu|rdv,vota,log}
+      URNA_FASES: ${URNA_FASES:-bu|rdv,vota,log|imgbu}
     volumes:
       - ./dados/urnas:/dados/urnas
     depends_on:

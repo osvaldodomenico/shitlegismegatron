@@ -45,8 +45,11 @@ UFS = [u.strip().lower() for u in os.environ.get("URNA_UFS", "sp").split(",") if
 DIR = Path(os.environ.get("URNA_DIR", "/dados/urnas"))
 CONCORRENCIA = int(os.environ.get("URNA_CONCURRENCY", "8"))
 INTERVALO = int(os.environ.get("URNA_INTERVAL_SECONDS", "1800"))
+# Fases: bu primeiro (e o que vira voto), depois o resto, imgbu por ultimo —
+# o TSE lista a imagem no indice mas demora a publica-la (404), entao ela nao
+# pode travar as outras fases.
 FASES = [[t.strip() for t in f.split(",") if t.strip()]
-         for f in os.environ.get("URNA_FASES", "bu,imgbu|rdv,vota,log").split("|")]
+         for f in os.environ.get("URNA_FASES", "bu|rdv,vota,log|imgbu").split("|")]
 
 HEARTBEAT = "megatron:heartbeat:urnas"
 
@@ -121,14 +124,27 @@ async def secoes_da_uf(pool: asyncpg.Pool, uf: str) -> list[tuple[str, int, int]
 
 
 async def estado_atual(pool: asyncpg.Pool, uf: str) -> dict[tuple[str, int, int], dict]:
+    """
+    Estado ENXUTO por secao: hash + quais tipos ja estao no disco. Carregar o
+    jsonb `arquivos` inteiro das 104 mil secoes estourava os 256 MB do
+    container (OOM 11x na madrugada de 05/10, fase 2 nunca rodou).
+    """
     async with pool.acquire() as con:
         rows = await con.fetch(
-            "SELECT cod_mun, zona, secao, hash, arquivos, sem_urna, st FROM urna_secao WHERE uf = $1", uf
+            "SELECT cod_mun, zona, secao, hash, sem_urna, tentativas, "
+            "ARRAY(SELECT jsonb_object_keys(arquivos)) AS tipos FROM urna_secao WHERE uf = $1", uf
         )
     return {(r["cod_mun"], r["zona"], r["secao"]): {
-        "hash": r["hash"], "arquivos": json.loads(r["arquivos"]) if isinstance(r["arquivos"], str) else (r["arquivos"] or {}),
-        "sem_urna": r["sem_urna"], "st": r["st"],
+        "hash": r["hash"], "tipos": frozenset(r["tipos"] or ()), "sem_urna": r["sem_urna"],
+        "tentativas": r["tentativas"] or 0,
     } for r in rows}
+
+
+async def arquivos_de(pool: asyncpg.Pool, uf: str, mun: str, zona: int, secao: int) -> dict:
+    async with pool.acquire() as con:
+        v = await con.fetchval("SELECT arquivos FROM urna_secao WHERE uf=$1 AND cod_mun=$2 AND zona=$3 AND secao=$4",
+                               uf, mun, zona, secao)
+    return json.loads(v) if isinstance(v, str) else (v or {})
 
 
 async def gravar(pool: asyncpg.Pool, uf: str, mun: str, zona: int, secao: int, **campos) -> None:
@@ -161,9 +177,9 @@ async def coletar_secao(client: httpx.AsyncClient, pool: asyncpg.Pool, sem: asyn
     """
     async with sem:
         try:
-            ja = (atual or {}).get("arquivos") or {}
-            if atual and atual.get("hash") and all(t in ja for t in tipos if t in ("bu", "rdv", "vota", "log")) \
-               and ("imgbu" not in tipos or "imgbu" in ja):
+            tem = (atual or {}).get("tipos") or frozenset()
+            # Completo PARA ESTA FASE: todos os tipos da fase ja no disco.
+            if atual and atual.get("hash") and all(t in tem for t in tipos):
                 return "completo"
 
             # Indice: so rebaixa se ainda nao temos hash (ou se faltam arquivos
@@ -180,6 +196,8 @@ async def coletar_secao(client: httpx.AsyncClient, pool: asyncpg.Pool, sem: asyn
                 await gravar(pool, uf, mun, zona, secao, pleito=PLEITO, st=aux.get("st"), aux=aux, sem_urna=False)
                 return "parcial"
 
+            # So agora (secao que precisa de algo) le o jsonb completo dela.
+            ja = await arquivos_de(pool, uf, mun, zona, secao) if atual and atual.get("hash") else {}
             arquivos = dict(ja) if ja and atual.get("hash") == hash_hex else {}
             faltou = False
             for a in lista:
