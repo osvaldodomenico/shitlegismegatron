@@ -142,6 +142,37 @@ services:
         condition: service_healthy
     networks: [megatron_net]
 
+  # Coletor de BOLETINS DE URNA por secao (04/10, "100% de tudo"): varre as
+  # secoes do cadastro de locais de votacao (tabela locais_votacao), baixa
+  # bu/imgbu/rdv/vota/log para o disco e indexa em urna_secao. Fase 1 = bu e
+  # imgbu de todas as secoes; fase 2 = o resto. Repete a varredura a cada 30 min
+  # para pegar secoes recebidas depois. SP ~ 104 mil secoes, ~23 GB.
+  collector_urnas:
+    <<: *logging
+    build: ./collector
+    command: ["python", "urnas.py"]
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      PYTHONUNBUFFERED: "1"
+      TSE_BASE_URL: ${TSE_BASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      POSTGRES_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb/${POSTGRES_DB}
+      URNA_PLEITO: ${URNA_PLEITO:-3220}
+      URNA_UFS: ${URNA_UFS:-sp}
+      URNA_DIR: /dados/urnas
+      URNA_CONCURRENCY: ${URNA_CONCURRENCY:-8}
+      URNA_INTERVAL_SECONDS: ${URNA_INTERVAL_SECONDS:-1800}
+      URNA_FASES: ${URNA_FASES:-bu,imgbu|rdv,vota,log}
+    volumes:
+      - ./dados/urnas:/dados/urnas
+    depends_on:
+      redis:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+    networks: [megatron_net]
+
   api:
     <<: *logging
     build: ./api
