@@ -36,7 +36,8 @@ frontend|
 collector|megatron:heartbeat:collector
 collector_municipios|megatron:heartbeat:municipios
 collector_urnas|megatron:heartbeat:urnas
-collector_bu|megatron:heartbeat:bu"
+collector_bu|megatron:heartbeat:bu
+bi_sync|megatron:heartbeat:bi_sync"
 
 status_de() { docker compose -f "$COMPOSE" ps --format '{{.Service}}|{{.Status}}' 2>/dev/null | grep "^$1|" | cut -d'|' -f2; }
 batimento() { [ -z "$1" ] && return 0; [ -n "$(docker exec megatron-redis-1 redis-cli get "$1" 2>/dev/null)" ]; }

@@ -38,3 +38,13 @@ def test_achatar_publica_vagas_em_v_e_total_de_votos_em_tv():
     flat = achatar(_payload())
     assert flat["v"] == "70"       # carg.nv — vagas da corrida (quociente = vv / v)
     assert flat["tv"] == "1100"    # total de votos apurados
+
+
+def test_eleito_com_e_s_nao_vira_anulado_quando_o_tse_manda_dvt():
+    """05/10/2026: `e` = eleito; `dvt` vem pronto. Eleito NAO pode virar anulado."""
+    p = _payload()
+    c = p["carg"][0]["agr"][0]["par"][0]["cand"][0]
+    c.update({"e": "s", "st": "Eleito", "dvt": "Válido"})
+    assert achatar(p)["cand"][0]["dvt"] == "Válido"
+    c["dvt"] = "Anulado"
+    assert achatar(p)["cand"][0]["dvt"] == "Anulado"

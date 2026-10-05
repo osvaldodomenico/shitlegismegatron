@@ -74,6 +74,12 @@ def _voto_anulado(cand: dict) -> str:
     `cand[].e == "s"` com `dvt: "Anulado"` no arquivo equivalente de 2022.
     Sem esta traducao, `apuracao.calcular` somaria votos anulados no quociente.
     """
+    # 2026: o TSE manda `dvt` pronto ("Válido", "Anulado", ...) e usa `e` para
+    # ELEITO ("s"). Tratar `e == "s"` como anulado marcou todo eleito como
+    # anulado em 05/10 (Tarcisio, Derrite, Andre do Prado). `dvt` do TSE manda.
+    dvt = _texto(cand.get("dvt")).strip()
+    if dvt:
+        return dvt
     return "Anulado" if _texto(cand.get("e")).strip().lower() == "s" else "Válido"
 
 

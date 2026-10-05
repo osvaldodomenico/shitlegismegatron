@@ -91,6 +91,11 @@ for c in $(docker ps --format '{{.Names}}' | grep '^megatron-'); do
     sed -i "/^$c=/d" "$RC_ARQ"; echo "$c=$rc" >> "$RC_ARQ"
 done
 
+# ------------------------------------- 2f) sincronizador com o BI (bi_sync)
+HB_BIS="$(docker exec megatron-redis-1 redis-cli get megatron:heartbeat:bi_sync 2>/dev/null </dev/null)"
+[ -z "$HB_BIS" ] && anotar "bi_sync (MEGATRON -> Legis Inteligencia) sem batimento"
+grep -q "FALHA" <(tail -5 /var/log/megatron-bi-agg.log 2>/dev/null) && anotar "agregacao do BI falhou: $(grep FALHA /var/log/megatron-bi-agg.log | tail -1)"
+
 # --------------------------------------------- 3) as corridas configuradas
 CORRIDAS="$(python3 - "$RAIZ/.env" <<'PY'
 import sys
