@@ -76,6 +76,21 @@ HB_URNA="$(docker exec megatron-redis-1 redis-cli get megatron:heartbeat:urnas 2
 HB_BU="$(docker exec megatron-redis-1 redis-cli get megatron:heartbeat:bu 2>/dev/null </dev/null)"
 [ -z "$HB_BU" ] && anotar "carregador de boletins (collector_bu) sem batimento"
 
+# ------------------------- 2e) reinicios silenciosos do Docker (RestartCount)
+# `restart: unless-stopped` sobe de novo um container que morreu (ex.: OOM) sem
+# ninguem ver — em 05/10 o coletor de urnas morreu 11x de madrugada assim.
+# Compara o contador com a ultima leitura e anota se cresceu.
+RC_ARQ=/var/tmp/megatron-vigia-restarts
+touch "$RC_ARQ"
+for c in $(docker ps --format '{{.Names}}' | grep '^megatron-'); do
+    rc="$(docker inspect "$c" --format '{{.RestartCount}}' 2>/dev/null || echo 0)"
+    ant="$(grep "^$c=" "$RC_ARQ" | cut -d= -f2)"
+    if [ -n "$ant" ] && [ "$rc" -gt "$ant" ]; then
+        anotar "$c reiniciou sozinho $((rc - ant))x desde a ultima checagem (RestartCount=$rc; OOM? ver dmesg)"
+    fi
+    sed -i "/^$c=/d" "$RC_ARQ"; echo "$c=$rc" >> "$RC_ARQ"
+done
+
 # --------------------------------------------- 3) as corridas configuradas
 CORRIDAS="$(python3 - "$RAIZ/.env" <<'PY'
 import sys
