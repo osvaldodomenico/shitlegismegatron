@@ -181,6 +181,15 @@ else
         fail "coletor de urnas parado ou sem boletins ($(printf '%s' "$urn" | tail -1))"
     fi
 
+    # Carregador de boletins: heartbeat + secoes carregadas, todas consistentes.
+    bu="$(ssh -o ConnectTimeout=10 vps2 'docker exec megatron-redis-1 redis-cli get megatron:heartbeat:bu; docker exec megatron-timescaledb-1 psql -U megatron -d megatron -tAc "select count(*) || chr(47) || coalesce(sum((not consistente)::int),0) from urna_bu"' 2>/dev/null)"
+    bu_tot="$(printf '%s' "$bu" | tail -1 | cut -d/ -f1)"; bu_inc="$(printf '%s' "$bu" | tail -1 | cut -d/ -f2)"
+    if printf '%s' "$bu" | head -1 | grep -q '"ts"' && [ "${bu_tot:-0}" -gt 1000 ] 2>/dev/null && [ "${bu_inc:-1}" -eq 0 ] 2>/dev/null; then
+        pass "carregador de boletins vivo — $bu_tot secoes no banco, 0 inconsistentes"
+    else
+        fail "carregador de boletins parado ou com inconsistencias ($(printf '%s' "$bu" | tail -1))"
+    fi
+
     asset="$(printf '%s' "$html" | grep -oE '/assets/[^"]+\.js' | head -1)"
     if [ -n "$asset" ]; then
         bytes="$(curl -s -o /tmp/megatron-prod.js -w '%{size_download}' --max-time 20 "https://$DOMINIO$asset")"
